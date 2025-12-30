@@ -5,14 +5,50 @@ SQLite 数据库连接工具 (本地化适配版)
 import sqlite3
 import os
 import threading
+import shutil
 from typing import Optional, Any, List, Dict
 from contextlib import contextmanager
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 数据库文件路径
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'quantdinger.db')
+# 数据库文件默认路径（兼容旧行为：backend_api_python/quantdinger.db）
+_BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_LEGACY_DB_FILE = os.path.join(_BASE_DIR, 'quantdinger.db')
+
+
+def _get_db_file() -> str:
+    """
+    Resolve SQLite DB file path.
+
+    Priority:
+    - SQLITE_DATABASE_FILE env (Docker 推荐：/app/data/quantdinger.db)
+    - legacy default: backend_api_python/quantdinger.db
+
+    Also performs a best-effort one-time migration:
+    If the configured path doesn't exist but legacy db exists, copy legacy to configured path.
+    """
+    env_path = os.getenv('SQLITE_DATABASE_FILE')
+    db_path = (env_path or '').strip() or _LEGACY_DB_FILE
+
+    # Ensure parent dir exists
+    parent = os.path.dirname(db_path)
+    if parent and not os.path.exists(parent):
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except Exception:
+            pass
+
+    # Best-effort migration from legacy path
+    try:
+        if os.path.abspath(db_path) != os.path.abspath(_LEGACY_DB_FILE):
+            if (not os.path.exists(db_path)) and os.path.exists(_LEGACY_DB_FILE):
+                shutil.copy2(_LEGACY_DB_FILE, db_path)
+                logger.info(f"Migrated SQLite DB from legacy path to {db_path}")
+    except Exception as e:
+        logger.warning(f"SQLite DB migration skipped/failed: {e}")
+
+    return db_path
 
 # 线程锁，用于简单的并发控制（SQLite 对写操作有限制）
 _db_lock = threading.Lock()
@@ -465,14 +501,16 @@ def get_db_connection():
     # 初始化表结构
     if not _has_initialized:
         try:
-            conn_init = sqlite3.connect(DB_FILE)
+            db_file = _get_db_file()
+            conn_init = sqlite3.connect(db_file)
             _init_db_schema(conn_init)
             conn_init.close()
             _has_initialized = True
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
 
-    conn = SQLiteConnection(DB_FILE)
+    db_file = _get_db_file()
+    conn = SQLiteConnection(db_file)
     try:
         # with _db_lock: # SQLite 内部有锁，这里如果不跨线程共享连接其实不用强加锁
         yield conn
@@ -488,14 +526,16 @@ def get_db_connection_sync():
     global _has_initialized
     if not _has_initialized:
         try:
-            conn_init = sqlite3.connect(DB_FILE)
+            db_file = _get_db_file()
+            conn_init = sqlite3.connect(db_file)
             _init_db_schema(conn_init)
             conn_init.close()
             _has_initialized = True
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             
-    return SQLiteConnection(DB_FILE)
+    db_file = _get_db_file()
+    return SQLiteConnection(db_file)
 
 def close_db_connection():
     pass

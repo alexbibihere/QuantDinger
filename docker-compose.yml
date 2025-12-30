@@ -19,7 +19,8 @@ services:
       - ./backend_api_python/logs:/app/logs
       - ./backend_api_python/data:/app/data
       # Configuration file (optional, for development)
-      - ./backend_api_python/.env:/app/.env:ro
+      # NOTE: must be writable for /api/settings/save to persist changes
+      - ./backend_api_python/.env:/app/.env
     environment:
       - PYTHON_API_HOST=0.0.0.0
       - PYTHON_API_PORT=5000
