@@ -26,11 +26,9 @@
   </p>
 
   <p align="center">
-    <a href="https://www.quantdinger.com"><strong>웹사이트</strong></a> ·
-    <a href="https://ai.quantdinger.com"><strong>라이브 데모</strong></a> ·
-    <a href="CONTRIBUTORS.md"><strong>🌟 참여하기</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/issues"><strong>버그 신고</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/discussions"><strong>토론</strong></a>
+  <a href="https://www.quantdinger.com"><strong>공식 커뮤니티</strong></a> ·
+  <a href="https://ai.quantdinger.com"><strong>라이브 데모</strong></a> ·
+  <a href="CONTRIBUTORS.md"><strong>🌟 참여하기</strong></a>
   </p>
 
   <p align="center">

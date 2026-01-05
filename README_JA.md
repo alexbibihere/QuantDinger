@@ -26,11 +26,9 @@
   </p>
 
   <p align="center">
-    <a href="https://www.quantdinger.com"><strong>ウェブサイト</strong></a> ·
-    <a href="https://ai.quantdinger.com"><strong>ライブデモ</strong></a> ·
-    <a href="CONTRIBUTORS.md"><strong>🌟 参加する</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/issues"><strong>バグ報告</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/discussions"><strong>ディスカッション</strong></a>
+  <a href="https://www.quantdinger.com"><strong>公式コミュニティ</strong></a> ·
+  <a href="https://ai.quantdinger.com"><strong>ライブデモ</strong></a> ·
+  <a href="CONTRIBUTORS.md"><strong>🌟 参加する</strong></a>
   </p>
 
   <p align="center">

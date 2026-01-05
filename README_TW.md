@@ -26,11 +26,9 @@
   </p>
 
   <p align="center">
-    <a href="https://www.quantdinger.com"><strong>官網</strong></a> ·
-    <a href="https://ai.quantdinger.com"><strong>在線演示</strong></a> ·
-    <a href="CONTRIBUTORS.md"><strong>🌟 加入我們</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/issues"><strong>報告 Bug</strong></a> ·
-    <a href="https://github.com/brokermr810/QuantDinger/discussions"><strong>討論區</strong></a>
+  <a href="https://www.quantdinger.com"><strong>官方社區</strong></a> ·
+  <a href="https://ai.quantdinger.com"><strong>在線演示</strong></a> ·
+  <a href="CONTRIBUTORS.md"><strong>🌟 加入我們</strong></a>
   </p>
 
   <p align="center">
