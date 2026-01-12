@@ -1,8 +1,12 @@
 # QuantDinger Frontend Dockerfile
-# Stage 1: Build
+# Stage 1: Build stage
+# 使用阿里云Node.js镜像源
 FROM node:18-alpine as builder
 
 WORKDIR /app
+
+# 配置npm使用淘宝镜像源
+RUN npm config set registry https://registry.npmmirror.com
 
 # Copy package files
 COPY package*.json ./

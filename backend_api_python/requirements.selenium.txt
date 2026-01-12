@@ -1,0 +1,6 @@
+# 添加Selenium和ChromeDriver到requirements.txt
+
+# 在 requirements.txt 末尾添加:
+
+selenium>=4.15.0
+webdriver-manager>=4.0.0

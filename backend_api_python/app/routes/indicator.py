@@ -34,6 +34,29 @@ def _now_ts() -> int:
     return int(time.time())
 
 
+def _parse_user_id(userid) -> int:
+    """
+    解析用户 ID，兼容整数和字符串类型
+
+    Args:
+        userid: 用户 ID (整数) 或用户名 (字符串)
+
+    Returns:
+        整数类型的用户 ID
+    """
+    if isinstance(userid, int):
+        return userid
+    elif isinstance(userid, str):
+        # 尝试将字符串转换为整数
+        try:
+            return int(userid)
+        except ValueError:
+            # 如果转换失败（如 "quantdinger"），使用默认值 1
+            return 1
+    else:
+        return 1
+
+
 def _extract_indicator_meta_from_code(code: str) -> Dict[str, str]:
     """
     Extract indicator name/description from python code.
@@ -128,7 +151,7 @@ def get_indicators():
     """
     try:
         data = request.get_json() or {}
-        user_id = int(data.get("userid") or 1)
+        user_id = _parse_user_id(data.get("userid"))
 
         with get_db_connection() as db:
             cur = db.cursor()
@@ -172,7 +195,7 @@ def save_indicator():
     """
     try:
         data = request.get_json() or {}
-        user_id = int(data.get("userid") or 1)
+        user_id = _parse_user_id(data.get("userid"))
         indicator_id = int(data.get("id") or 0)
         code = data.get("code") or ""
         name = (data.get("name") or "").strip()
@@ -240,7 +263,7 @@ def delete_indicator():
     """Delete an indicator by id."""
     try:
         data = request.get_json() or {}
-        user_id = int(data.get("userid") or 1)
+        user_id = _parse_user_id(data.get("userid"))
         indicator_id = int(data.get("id") or 0)
         if not indicator_id:
             return jsonify({"code": 0, "msg": "id is required", "data": None}), 400
@@ -560,18 +583,70 @@ IMPORTANT: Output Python code directly, without explanations, without descriptio
             logger.warning(f"ai_generate openrouter failed, fallback to template: {e}")
             code_text = _template_code()
 
-        # Stream in chunks (front-end appends).
-        chunk_size = 200
-        for i in range(0, len(code_text), chunk_size):
-            chunk = code_text[i : i + chunk_size]
-            yield "data: " + json.dumps({"content": chunk}, ensure_ascii=False) + "\n\n"
-        yield "data: [DONE]\n\n"
 
-    return Response(
-        stream(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+
+@indicator_bp.route("/ma100", methods=["POST"])
+def get_ma100():
+    """
+    Get MA100 data for a symbol.
+    
+    Request:
+      {
+        "symbol": "BTCUSDT",
+        "interval": "15m",
+        "limit": 1
+      }
+    
+    Response:
+      {
+        "success": true,
+        "data": [{
+          "close": 90665.2,
+          "ma100": 89500.45
+        }]
+      }
+    """
+    try:
+        data = request.get_json() or {}
+        symbol = data.get("symbol", "").upper()
+        interval = data.get("interval", "15m")
+        limit = data.get("limit", 1)
+        
+        if not symbol:
+            return jsonify({"success": False, "error": "symbol is required"}), 400
+        
+        # 获取 K 线数据
+        from app.services.kline import KlineService
+        kline_service = KlineService()
+        kline_data = kline_service.get_kline(
+            market="Crypto",
+            symbol=symbol,
+            timeframe=interval,
+            limit=200
+        )
+        
+        if not kline_data or len(kline_data) < 100:
+            return jsonify({
+                "success": False,
+                "error": "Insufficient data to calculate MA100"
+            }), 400
+        
+        # 计算 MA100
+        import pandas as pd
+        df = pd.DataFrame(kline_data, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+        df['ma100'] = df['close'].rolling(window=100).mean()
+        
+        # 获取最新的数据
+        latest = df.iloc[-1].to_dict()
+        
+        return jsonify({
+            "success": True,
+            "data": [{
+                "close": float(latest['close']),
+                "ma100": float(latest['ma100']) if not pd.isna(latest['ma100']) else None
+            }]
+        })
+        
+    except Exception as e:
+        logger.error(f"get_ma100 failed: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -128,6 +128,19 @@
               </a-row>
             </a-form>
           </a-collapse-panel>
+
+          <!-- 交易所凭证管理 -->
+          <a-collapse-panel key="exchange_credentials">
+            <template slot="header">
+              <span class="panel-header">
+                <span class="panel-title">{{ $t('settings.exchangeCredentials.title') }}</span>
+              </span>
+            </template>
+            <template slot="extra">
+              <a-icon type="bank" class="panel-icon" />
+            </template>
+            <exchange-credentials />
+          </a-collapse-panel>
         </a-collapse>
       </div>
     </a-spin>
@@ -148,9 +161,13 @@
 <script>
 import { getSettingsSchema, getSettingsValues, saveSettings } from '@/api/settings'
 import { baseMixin } from '@/store/app-mixin'
+import ExchangeCredentials from './components/ExchangeCredentials.vue'
 
 export default {
   name: 'Settings',
+  components: {
+    ExchangeCredentials
+  },
   mixins: [baseMixin],
   data () {
     return {
@@ -158,7 +175,7 @@ export default {
       saving: false,
       schema: {},
       values: {},
-      activeKeys: ['ai', 'data_source', 'app', 'auth'],
+      activeKeys: ['ai', 'data_source', 'app', 'auth', 'exchange_credentials'],
       passwordVisible: {},
       showRestartTip: false
     }

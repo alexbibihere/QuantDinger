@@ -4,6 +4,24 @@
 version: '3.8'
 
 services:
+  # Redis Cache Service (可选,如果本地已有 Redis 可以注释掉)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: quantdinger-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   command: redis-server --appendonly yes
+  #   networks:
+  #     - quantdinger-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
   # Backend API Service
   backend:
     build:
@@ -26,6 +44,21 @@ services:
       - PYTHON_API_PORT=5000
       - TZ=Asia/Shanghai
       - SQLITE_DATABASE_FILE=/app/data/quantdinger.db
+      # VPN代理配置 (启用HTTP代理)
+      - PROXY_PORT=7890
+      - PROXY_URL=http://host.docker.internal:7890
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      # Redis配置 (使用本地Redis)
+      - REDIS_ENABLED=true
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+      - HAMA_SCHEDULER_ENABLED=true
+      - HAMA_SCHEDULER_AUTO_START=true
+      - HAMA_SCHEDULER_INTERVAL=5
+    extra_hosts:
+      # 允许容器访问宿主机的代理 (host.docker.internal -> 127.0.0.1)
+      - "host.docker.internal:host-gateway"
     networks:
       - quantdinger-network
     healthcheck:
@@ -57,7 +90,3 @@ networks:
   quantdinger-network:
     driver: bridge
 
-# Optional: Add data volumes (for more complex persistence)
-# volumes:
-#   backend-data:
-#   backend-logs:

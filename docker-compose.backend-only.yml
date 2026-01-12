@@ -1,0 +1,35 @@
+# 仅部署后端服务的Docker Compose配置
+# 用于网络受限时的快速部署
+
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend_api_python
+      dockerfile: Dockerfile
+    container_name: quantdinger-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./backend_api_python/logs:/app/logs
+      - ./backend_api_python/data:/app/data
+      - ./backend_api_python/.env:/app/.env
+    environment:
+      - PYTHON_API_HOST=0.0.0.0
+      - PYTHON_API_PORT=5000
+      - TZ=Asia/Shanghai
+      - SQLITE_DATABASE_FILE=/app/data/quantdinger.db
+    networks:
+      - quantdinger-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  quantdinger-network:
+    driver: bridge

@@ -44,6 +44,27 @@ export const asyncRouterMap = [
         component: () => import('@/views/indicator-community'),
         meta: { title: 'menu.dashboard.community', keepAlive: false, icon: 'shop', permission: ['dashboard'] }
       },
+      // 智能监控中心 (合并了涨幅榜分析和HAMA监控)
+      {
+        path: '/smart-monitor',
+        name: 'SmartMonitor',
+        component: () => import('@/views/smart-monitor'),
+        meta: { title: 'menu.smartMonitor', keepAlive: true, icon: 'thunderbolt', permission: ['dashboard'] }
+      },
+      // 多交易所对比
+      {
+        path: '/multi-exchange',
+        name: 'MultiExchange',
+        component: () => import('@/views/multi-exchange'),
+        meta: { title: 'menu.multiExchange', keepAlive: true, icon: 'stock', permission: ['dashboard'] }
+      },
+      // TradingView Scanner
+      {
+        path: '/tradingview-scanner',
+        name: 'TradingViewScanner',
+        component: () => import('@/views/tradingview-scanner'),
+        meta: { title: 'menu.tradingviewScanner', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
+      },
       // 系统设置
       {
         path: '/settings',

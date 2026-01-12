@@ -1,15 +1,32 @@
 # QuantDinger Backend API Dockerfile
+# 使用阿里云镜像源
 FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 配置APT使用阿里云镜像源并安装系统依赖
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
     curl \
+    wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# 安装Chromium浏览器(Debian自带,无需下载Google Chrome)
+RUN apt-get update && \
+    apt-get install -y chromium chromium-driver && \
+    rm -rf /var/lib/apt/lists/*
+
+# 设置Chromium环境变量
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROME_PATH=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+
+# 配置pip使用清华镜像源
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Copy dependency file
 COPY requirements.txt .
