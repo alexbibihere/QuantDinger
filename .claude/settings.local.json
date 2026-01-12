@@ -45,7 +45,9 @@
       "Bash(git checkout:*)",
       "Bash(docker-compose exec:*)",
       "Bash(time:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git add:*)"
     ]
   }
 }
