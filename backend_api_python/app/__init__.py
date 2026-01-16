@@ -457,5 +457,14 @@ def create_app(config_name='default'):
         start_reflection_worker()
         restore_running_strategies()
 
+        # 7. 启动截图缓存 Worker
+        try:
+            logger.info("准备启动截图缓存 Worker...")
+            from app.routes.tradingview_scanner import start_screenshot_worker
+            start_screenshot_worker()
+            logger.info("✅ 截图缓存 Worker 已启动")
+        except Exception as e:
+            logger.error(f"❌ 启动截图缓存 Worker 失败: {e}", exc_info=True)
+
     return app
 

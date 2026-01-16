@@ -101,7 +101,51 @@ QuantDinger/
 - [trading_executor.py](backend_api_python/app/services/trading_executor.py): 策略执行器
 - [signal_notifier.py](backend_api_python/app/services/signal_notifier.py): 信号通知 (Telegram/Email/Webhook)
 
-### 4. 统一数据源接口
+### 4. TradingView 集成与 HAMA 指标
+
+系统实现了完整的 TradingView 数据获取和 HAMA 指标计算功能：
+
+#### TradingView Scanner 功能
+- **涨幅榜监控**: 实时监控币安合约涨幅榜前100名
+- **自动刷新**: 每5分钟自动刷新数据
+- **默认币种**: BTCUSDT、ETHUSDT 固定显示在页面顶部
+- **截图缓存**: 后台 Worker 自动缓存涨幅榜前10名币种的15分钟图表截图到 Redis，每10分钟刷新
+- **Widget URL**: 使用 `https://s.tradingview.com/widgetembed/` 不需要登录即可显示图表
+
+关键文件:
+- [tradingview_scanner.py](backend_api_python/app/routes/tradingview_scanner.py): Scanner API 和截图缓存 Worker
+- [tradingview_scanner_service.py](backend_api_python/app/services/tradingview_scanner_service.py): 数据获取服务
+- [gainer_tracker.py](backend_api_python/app/services/gainer_tracker.py): 涨幅榜统计
+
+#### HAMA 指标多种实现方案
+系统提供 **5 种方案** 获取 HAMA 指标：
+
+1. **本地计算 (推荐)**: [hama_calculator.py](backend_api_python/app/services/hama_calculator.py)
+   - API: `/api/hama/calculate`
+   - 速度: ~10ms
+   - 成本: 免费
+   - 适用场景: 生产环境首选
+
+2. **OCR 识别**: [hama_ocr_extractor.py](backend_api_python/app/services/hama_ocr_extractor.py)
+   - API: `/api/hama-ocr/extract`
+   - 使用 PaddleOCR (完全免费)
+   - 速度: ~2秒
+   - 适用场景: 日常使用推荐
+
+3. **Playwright**: [tradingview_playwright.py](backend_api_python/app/services/tradingview_playwright.py)
+   - 使用 playwright-stealth 绕过反爬
+   - 支持 Cookie 认证
+   - 适用场景: 验证/调试
+
+4. **GPT-4o 视觉**: [hama_vision_extractor.py](backend_api_python/app/services/hama_vision_extractor.py)
+   - 使用大模型视觉识别
+   - 成本: ~$0.0025/次
+   - 适用场景: 高精度需求
+
+5. **Pyppeteer**: [tradingview_pyppeteer.py](backend_api_python/app/services/tradingview_pyppeteer.py)
+   - 备用浏览器自动化方案
+
+### 5. 统一数据源接口
 
 支持多市场数据，通过 [data_sources/](backend_api_python/app/data_sources/) 统一接口：
 - **加密货币**: CCXT (100+ 交易所)
@@ -122,7 +166,7 @@ cp backend_api_python/env.example backend_api_python/.env
 docker-compose up -d --build
 
 # 访问
-# 前端: http://localhost:8888
+# 前端: http://localhost:8000
 # 后端: http://localhost:5000
 
 # 常用命令
@@ -241,6 +285,11 @@ SQLite 数据库默认位置: `backend_api_python/data/quantdinger.db`
 前端支持 10 种语言，文件在 [quantdinger_vue/src/locales/](quantdinger_vue/src/locales/):
 - 简体中文、繁体中文、英语、日语、韩语、德语、法语、泰语、越南语、阿拉伯语
 
+TradingView 行情页面配置:
+- **默认币种区块**: BTCUSDT、ETHUSDT (固定显示在顶部，蓝色标签，★排名)
+- **涨幅榜区块**: 涨幅前10币种 (绿色标签，正常排名)
+- **截图缓存**: 自动缓存到 Redis，TTL 600秒 (10分钟)
+
 ## 开发原则
 
 1. **本地优先**: 所有数据存储在本地，API 密钥不上传
@@ -295,6 +344,28 @@ SQLite 数据库默认位置: `backend_api_python/data/quantdinger.db`
 5. 启用 AI 代理分析 (需 OPENROUTER_API_KEY)
 6. (谨慎) 在测试网启动实时交易
 
+### 测试 TradingView Scanner
+1. 访问 http://localhost:8000/#/tradingview-scanner
+2. 查看默认币种 (BTCUSDT, ETHUSDT)
+3. 查看涨幅榜前10
+4. 点击展开行查看截图
+
+### 测试 HAMA 指标
+```bash
+# 本地计算 (推荐)
+curl -X POST http://localhost:5000/api/hama/calculate \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "BTCUSDT", "ohlcv": [[...], ...]}'
+
+# OCR 识别 (免费)
+curl -X POST http://localhost:5000/api/hama-ocr/extract \
+  -H "Content-Type: application/json" \
+  -d '{"chart_url": "https://cn.tradingview.com/chart/xxx/", "symbol": "ETHUSD", "interval": "15"}'
+
+# 获取图表截图
+curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m"
+```
+
 ## 部署注意事项
 
 - 生产环境必须更改 `SECRET_KEY` 和默认密码
@@ -302,3 +373,36 @@ SQLite 数据库默认位置: `backend_api_python/data/quantdinger.db`
 - 设置适当的资源限制 (CPU/内存)
 - 定期备份 `data/quantdinger.db` 和 `.env` 文件
 - 监控日志文件大小，配置日志轮转
+- 确保代理配置正确 (如果使用代理)
+- Redis 可选但推荐用于生产环境
+
+## 截图缓存系统详细说明
+
+### 架构
+- 后台 Worker: 服务启动时自动启动
+- 缓存范围: 涨幅榜前10个币种
+- 刷新周期: 每10分钟
+- TTL: 600秒 (10分钟)
+- 图表周期: 15分钟
+- URL 格式: TradingView Widget Embed (不需要登录)
+
+### API 使用
+```bash
+# 获取截图 (优先从缓存)
+curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m"
+
+# 强制刷新 (忽略缓存)
+curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m&force_refresh=true"
+```
+
+### 前端展示
+- TradingView Scanner 页面: http://localhost:8000/#/tradingview-scanner
+- 默认币种区块: BTCUSDT, ETHUSDT (固定在顶部)
+- 涨幅榜区块: 动态显示涨幅前10
+- 点击展开行显示截图
+
+### 配置修改
+修改 [tradingview_scanner.py](backend_api_python/app/routes/tradingview_scanner.py):
+- 第 240 行: `get_top_gainers(limit=10)` - 修改缓存数量
+- 第 117 行: `_SCREENSHOT_CACHE_TTL = 600` - 修改 TTL
+- `interval_mapping`: 修改时间周期映射 (15m->15, 1h->60, 1d->D 等)
