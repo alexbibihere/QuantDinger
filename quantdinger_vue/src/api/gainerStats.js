@@ -51,6 +51,23 @@ export function getTodayAppearances () {
 }
 
 /**
+ * 获取涨幅榜历史数据
+ * @param {Object} options 参数选项
+ * @param {number} options.days 查询最近多少天,默认7
+ */
+export function getGainerHistory (options = {}) {
+  const { days = 7 } = options
+
+  return request({
+    url: '/api/gainer-stats/history',
+    method: 'get',
+    params: {
+      days
+    }
+  })
+}
+
+/**
  * 手动记录涨幅榜出现(用于测试)
  * @param {Object} data 记录数据
  * @param {Array<string>} data.symbols 币种列表

@@ -1,0 +1,7 @@
+{
+  "sessionid": "您的TradingView sessionid",
+  "sessionid_sign": "您的TradingView sessionid_sign",
+  "uid": "您的TradingView uid",
+  "_comment": "复制此文件为 tradingview_cookies.json 并填入真实值",
+  "_how_to_get": "按照 TRADINGVIEW_COOKIES.md 中的说明获取cookies"
+}

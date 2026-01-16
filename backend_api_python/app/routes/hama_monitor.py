@@ -259,6 +259,72 @@ def remove_symbol():
         }), 500
 
 
+@hama_monitor_bp.route('/calculate', methods=['POST'])
+def calculate_hama():
+    """
+    按需计算单个币种的HAMA状态并存储到Redis
+
+    POST /api/hama-monitor/calculate
+    Body: {
+        "symbol": "BTCUSDT",
+        "market_type": "spot"  // 可选,默认 spot
+    }
+    """
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol', '').upper()
+
+        if not symbol:
+            return jsonify({
+                'code': 0,
+                'msg': '请提供币种符号'
+            }), 400
+
+        market_type = data.get('market_type', 'spot')
+
+        from app.services.hama_hybrid_service import HAMAHybridService
+        from app import get_redis_client
+
+        # 创建HAMA服务实例
+        hama_service = HAMAHybridService()
+
+        # 计算HAMA状态
+        logger.info(f"开始计算币种 {symbol} 的HAMA状态 ({market_type})")
+        result = hama_service.get_hama_indicator(symbol, interval='15')
+
+        if result and isinstance(result, dict):
+            # 添加成功标记
+            result['success'] = True
+            result['symbol'] = symbol
+            result['is_cached'] = result.get('cached', False)
+
+            # 缓存到Redis
+            redis_client = get_redis_client()
+            if redis_client:
+                from app.services.hama_cache import HamaCacheManager
+                cache_manager = HamaCacheManager(redis_client, default_ttl=300)
+                cache_manager.set(symbol, result, ttl=300)
+                logger.info(f"已缓存 {symbol} 的HAMA状态到Redis")
+
+            return jsonify({
+                'code': 1,
+                'msg': 'success',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'code': 0,
+                'msg': '计算HAMA状态失败'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"计算HAMA状态失败: {str(e)}", exc_info=True)
+        return jsonify({
+            'code': 0,
+            'msg': f'计算失败: {str(e)}'
+        }), 500
+
+
 @hama_monitor_bp.route('/symbols/add-top-gainers', methods=['POST'])
 def add_top_gainers():
     """

@@ -26,13 +26,18 @@ class GainerAppearanceTracker:
         self.daily_key = f"{self.key_prefix}:daily"
         self.stats_key = f"{self.key_prefix}:stats"
 
-    def record_appearance(self, symbol: str, date: str = None):
+    def record_appearance(self, symbol: str, date: str = None, price: float = None,
+                         change_percentage: float = None, volume: float = None, rank: int = None):
         """
-        记录币种在涨幅榜中的出现
+        记录币种在涨幅榜中的出现（包含完整涨幅信息）
 
         Args:
             symbol: 币种符号
             date: 日期字符串 (YYYY-MM-DD),默认为今天
+            price: 价格
+            change_percentage: 涨跌幅
+            volume: 成交量
+            rank: 当天排名
         """
         if not self.redis_client:
             logger.warning("Redis客户端未初始化,无法记录涨幅榜出现次数")
@@ -42,19 +47,58 @@ class GainerAppearanceTracker:
             date = datetime.now().strftime("%Y-%m-%d")
 
         try:
-            # 记录该日期的涨幅榜币种列表
-            daily_key = f"{self.daily_key}:{date}"
-            self.redis_client.sadd(daily_key, symbol)
-            # 设置过期时间: 保留30天
-            self.redis_client.expire(daily_key, 30 * 24 * 3600)
+            # 数据结构改为: 以币种为key，value为包含所有历史记录的列表
+            symbol_key = f"{self.key_prefix}:symbol:{symbol}"
 
-            # 更新总出现次数
-            self.redis_client.hincrby(self.stats_key, symbol, 1)
+            # 获取该币种的历史记录
+            history_data = self.redis_client.get(symbol_key)
+            if history_data:
+                history = json.loads(history_data)
+            else:
+                history = {'appearances': []}
 
-            logger.debug(f"记录币种 {symbol} 在 {date} 出现在涨幅榜")
+            # 检查当天是否已记录
+            existing_record = next((r for r in history['appearances'] if r['date'] == date), None)
+
+            # 构造当天记录
+            daily_record = {
+                'date': date,
+                'price': price,
+                'change_percentage': change_percentage,
+                'volume': volume,
+                'rank': rank,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            if existing_record:
+                # 更新已存在的记录
+                existing_record.update(daily_record)
+            else:
+                # 添加新记录
+                history['appearances'].append(daily_record)
+
+                # 更新总出现次数
+                self.redis_client.hincrby(self.stats_key, symbol, 1)
+
+            # 保持记录按日期降序排列
+            history['appearances'].sort(key=lambda x: x['date'], reverse=True)
+
+            # 只保留最近30天的记录
+            cutoff_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            history['appearances'] = [r for r in history['appearances'] if r['date'] >= cutoff_date]
+
+            # 保存到Redis（30天过期）
+            self.redis_client.setex(symbol_key, 30 * 24 * 3600, json.dumps(history))
+
+            # 同时记录到每日索引（用于快速查询某天有哪些币种）
+            daily_index_key = f"{self.daily_key}:{date}"
+            self.redis_client.sadd(daily_index_key, symbol)
+            self.redis_client.expire(daily_index_key, 30 * 24 * 3600)
+
+            logger.debug(f"记录币种 {symbol} 在 {date} 的涨幅信息")
 
         except Exception as e:
-            logger.error(f"记录涨幅榜出现失败: {e}")
+            logger.error(f"记录涨幅信息失败: {e}")
 
     def get_top_frequent_symbols(self, limit: int = 20, days: int = 7) -> List[Dict]:
         """
@@ -159,6 +203,101 @@ class GainerAppearanceTracker:
             logger.error(f"获取今日涨幅榜失败: {e}")
             return []
 
+    def get_symbol_history(self, symbol: str, days: int = 30) -> Dict:
+        """
+        获取单个币种的完整涨幅历史记录
+
+        Args:
+            symbol: 币种符号
+            days: 查询最近多少天
+
+        Returns:
+            包含该币种所有历史记录的字典
+            {
+                'symbol': 'BTCUSDT',
+                'total_appearances': 15,
+                'appearances': [
+                    {
+                        'date': '2026-01-13',
+                        'price': 42500.50,
+                        'change_percentage': 5.2,
+                        'volume': 1000000,
+                        'rank': 1
+                    },
+                    ...
+                ]
+            }
+        """
+        if not self.redis_client:
+            return {'symbol': symbol, 'total_appearances': 0, 'appearances': []}
+
+        try:
+            symbol_key = f"{self.key_prefix}:symbol:{symbol}"
+            history_data = self.redis_client.get(symbol_key)
+
+            if not history_data:
+                return {'symbol': symbol, 'total_appearances': 0, 'appearances': []}
+
+            history = json.loads(history_data)
+            appearances = history.get('appearances', [])
+
+            # 过滤指定天数
+            cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            filtered_appearances = [a for a in appearances if a['date'] >= cutoff_date]
+
+            # 获取总出现次数
+            total_count_bytes = self.redis_client.hget(self.stats_key, symbol)
+            total_count = int(total_count_bytes) if total_count_bytes else len(appearances)
+
+            return {
+                'symbol': symbol,
+                'total_appearances': total_count,
+                'appearances': filtered_appearances
+            }
+
+        except Exception as e:
+            logger.error(f"获取币种 {symbol} 历史记录失败: {e}")
+            return {'symbol': symbol, 'total_appearances': 0, 'appearances': []}
+
+    def get_all_symbols_history(self, days: int = 7, min_appearances: int = 1) -> List[Dict]:
+        """
+        获取所有币种的历史记录（用于排行榜）
+
+        Args:
+            days: 查询最近多少天
+            min_appearances: 最小出现次数
+
+        Returns:
+            币种历史列表
+        """
+        if not self.redis_client:
+            return []
+
+        try:
+            # 从统计中获取所有币种
+            all_stats = self.redis_client.hgetall(self.stats_key)
+
+            if not all_stats:
+                return []
+
+            result = []
+            for symbol in all_stats.keys():
+                symbol_str = symbol.decode('utf-8') if isinstance(symbol, bytes) else symbol
+                symbol_history = self.get_symbol_history(symbol_str, days)
+
+                # 过滤掉出现次数过少的
+                if symbol_history['total_appearances'] >= min_appearances:
+                    result.append(symbol_history)
+
+            # 按出现次数降序排序
+            result.sort(key=lambda x: x['total_appearances'], reverse=True)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"获取所有币种历史失败: {e}")
+            return []
+
     def clear_old_data(self, keep_days: int = 30):
         """
         清理过期数据
@@ -211,19 +350,37 @@ def get_gainer_tracker():
     return _tracker
 
 
-def record_gainer_appearance(symbols: List[str], date: str = None):
+def record_gainer_appearance(gainer_data: List[Dict], date: str = None):
     """
-    批量记录币种在涨幅榜中的出现
+    批量记录币种在涨幅榜中的出现（包含完整信息）
 
     Args:
-        symbols: 币种列表
+        gainer_data: 币种数据列表，每个元素包含:
+            {
+                'symbol': 'BTCUSDT',
+                'price': 42500.50,
+                'change_percentage': 5.2,
+                'volume': 1000000,
+                'rank': 1
+            }
         date: 日期字符串
     """
     tracker = get_gainer_tracker()
     if not tracker:
         return
 
-    for symbol in symbols:
-        tracker.record_appearance(symbol, date)
+    for data in gainer_data:
+        symbol = data.get('symbol')
+        if not symbol:
+            continue
 
-    logger.info(f"已记录 {len(symbols)} 个币种在涨幅榜中的出现")
+        tracker.record_appearance(
+            symbol=symbol,
+            date=date,
+            price=data.get('price'),
+            change_percentage=data.get('change_percentage'),
+            volume=data.get('volume'),
+            rank=data.get('rank')
+        )
+
+    logger.info(f"已记录 {len(gainer_data)} 个币种在涨幅榜中的出现")

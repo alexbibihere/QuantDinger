@@ -56,6 +56,18 @@ export function addSymbol (data) {
 }
 
 /**
+ * 按需计算单个币种的HAMA状态
+ * @param {Object} data { symbol: string, market_type?: string }
+ */
+export function calculateHama (data) {
+  return request({
+    url: '/api/hama-monitor/calculate',
+    method: 'post',
+    data
+  })
+}
+
+/**
  * 移除监控币种
  * @param {Object} data { symbol: string }
  */

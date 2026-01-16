@@ -107,3 +107,53 @@ class MetaCacheConfig(type):
 class CacheConfig(metaclass=MetaCacheConfig):
     """缓存配置"""
     pass
+
+
+class MetaMySQLConfig(type):
+    """MySQL 配置元类"""
+
+    @property
+    def HOST(cls):
+        return os.getenv('MYSQL_HOST', 'localhost')
+
+    @property
+    def PORT(cls):
+        return int(os.getenv('MYSQL_PORT', 3306))
+
+    @property
+    def USER(cls):
+        return os.getenv('MYSQL_USER', 'quantdinger')
+
+    @property
+    def PASSWORD(cls):
+        return os.getenv('MYSQL_PASSWORD', '')
+
+    @property
+    def DATABASE(cls):
+        return os.getenv('MYSQL_DATABASE', 'quantdinger')
+
+    @property
+    def CHARSET(cls):
+        return os.getenv('MYSQL_CHARSET', 'utf8mb4')
+
+
+class MySQLConfig(metaclass=MetaMySQLConfig):
+    """MySQL 数据库配置"""
+
+    @classmethod
+    def is_enabled(cls) -> bool:
+        """是否启用 MySQL"""
+        return os.getenv('DB_TYPE', 'sqlite').lower() == 'mysql'
+
+    @classmethod
+    def get_config(cls) -> dict:
+        """获取 MySQL 连接配置"""
+        return {
+            'host': cls.HOST,
+            'port': cls.PORT,
+            'user': cls.USER,
+            'password': cls.PASSWORD,
+            'database': cls.DATABASE,
+            'charset': cls.CHARSET,
+            'autocommit': False,
+        }

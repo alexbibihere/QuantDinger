@@ -28,6 +28,13 @@ def register_routes(app: Flask):
     from app.routes.aijiaoyi import aijiaoyi_bp
     from app.routes.sse import sse_bp
     from app.routes.gainer_stats import gainer_stats_bp
+    from app.routes.tradingview_hama import tradingview_hama_bp
+    from app.routes.tradingview_pyppeteer import tradingview_pyppeteer_bp
+    from app.routes.tradingview_playwright import tradingview_playwright_bp
+    from app.routes.hama_indicator import hama_bp
+    from app.routes.hama_vision import hama_vision_bp
+    from app.routes.hama_ocr import hama_ocr_bp
+    from app.routes.hama_market import hama_market_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp, url_prefix='/api/user')  # 兼容前端 /api/user/login
@@ -62,4 +69,11 @@ def register_routes(app: Flask):
     app.register_blueprint(aijiaoyi_bp, url_prefix='/api/aijiaoyi')
     app.register_blueprint(sse_bp, url_prefix='/api/sse')
     app.register_blueprint(gainer_stats_bp, url_prefix='/api/gainer-stats')
+    app.register_blueprint(tradingview_hama_bp, url_prefix='/api/tradingview-hama')
+    app.register_blueprint(tradingview_pyppeteer_bp, url_prefix='/api/tradingview-pyppeteer')
+    app.register_blueprint(tradingview_playwright_bp, url_prefix='/api/tradingview-playwright')
+    app.register_blueprint(hama_bp)
+    app.register_blueprint(hama_vision_bp)
+    app.register_blueprint(hama_ocr_bp)
+    app.register_blueprint(hama_market_bp)
 

@@ -47,7 +47,26 @@
       "Bash(time:*)",
       "Bash(tee:*)",
       "Bash(git remote set-url:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh:*)",
+      "Bash(pip install:*)",
+      "Bash(__NEW_LINE__ echo \"截图已复制到: d:/github/QuantDinger/ETHUSD_15_chart.png\")",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n文件类型:\")",
+      "Bash(__NEW_LINE__ echo \"=== 新截图已复制 ===\")",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n=== 文件信息 ===\")",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n2. 居中截图 \\(新\\):\")",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n=== 文件大小对比 ===\")",
+      "Bash(__NEW_LINE__ echo \"=== 最新截图已复制 ===\")",
+      "Bash(__NEW_LINE__ echo -e \"\\\\n=== 对比三次截图 ===\")",
+      "Bash(npm run serve)",
+      "Bash(cygpath:*)",
+      "Bash(for i in {1..3})",
+      "Bash(do echo:*)",
+      "Bash(break:*)",
+      "Bash(done:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

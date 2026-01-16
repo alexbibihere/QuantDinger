@@ -70,3 +70,17 @@ export function getStats () {
     method: 'get'
   })
 }
+
+/**
+ * 获取图表截图
+ * @param {Object} params
+ * @param {string} params.symbol - 币种符号
+ * @param {string} params.interval - 时间周期
+ */
+export function getChartScreenshot (params = {}) {
+  return request({
+    url: '/api/tradingview-scanner/chart-screenshot',
+    method: 'get',
+    params
+  })
+}

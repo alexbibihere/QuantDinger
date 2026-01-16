@@ -474,17 +474,89 @@ def get_price():
         }), 500
 
 
+@market_bp.route('/ticker', methods=['GET'])
+def get_ticker():
+    """
+    获取市场行情数据 (GET接口，用于测试)
+
+    参数:
+        symbol: 交易对符号，如 BTCUSDT
+    """
+    try:
+        symbol = request.args.get('symbol', '')
+        if not symbol:
+            return jsonify({
+                'code': 0,
+                'msg': 'Missing symbol parameter',
+                'data': None
+            }), 400
+
+        # 默认使用Crypto市场
+        result = get_single_price('Crypto', symbol)
+
+        return jsonify({
+            'code': 1,
+            'msg': 'success',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"get_ticker failed: {str(e)}")
+        return jsonify({
+            'code': 0,
+            'msg': f'Failed: {str(e)}',
+            'data': None
+        }), 500
+
+
+@market_bp.route('/search', methods=['GET'])
+def search_market():
+    """
+    搜索市场符号 (GET接口，用于测试)
+
+    参数:
+        query: 搜索关键词
+        market: 市场类型 (可选，默认 Crypto)
+    """
+    try:
+        query = request.args.get('query', '').upper()
+        market = request.args.get('market', 'Crypto')
+        limit = int(request.args.get('limit', 10))
+
+        if not query:
+            return jsonify({
+                'code': 0,
+                'msg': 'Missing query parameter',
+                'data': []
+            }), 400
+
+        # 使用种子数据搜索
+        results = seed_search_symbols(market=market, keyword=query, limit=limit)
+
+        return jsonify({
+            'code': 1,
+            'msg': 'success',
+            'data': results
+        })
+    except Exception as e:
+        logger.error(f"search_market failed: {str(e)}")
+        return jsonify({
+            'code': 0,
+            'msg': f'Failed: {str(e)}',
+            'data': []
+        }), 500
+
+
 @market_bp.route('/stock/name', methods=['POST'])
 def get_stock_name():
     """
     获取股票名称
-    
+
     请求体:
     {
         "market": "USStock",
         "symbol": "AAPL"
     }
-    
+
     响应:
     {
         "code": 1,

@@ -1,0 +1,81 @@
+// @version=2
+
+// NDT HAMA Candles with Bollinger Bands
+// 优化为 Aicoin 完全兼容版本
+
+// ===== 布林带部分 =====
+bb_length = 400 // 布林带周期
+bb_mult = 2.0 // 布林带标准差倍数
+
+// 计算布林带 (Aicoin使用EMA作为基准)
+basis = ema(close, bb_length)
+// 计算标准差 (简化版本，适合Aicoin)
+dev = sqrt(ema(pow(close - basis, 2), bb_length))
+upper = basis + dev * bb_mult
+lower = basis - dev * bb_mult
+
+// 绘制布林带
+plot(upper, "上轨", color="orange")
+plot(basis, "中轨", color="purple")
+plot(lower, "下轨", color="red")
+
+// ===== HAMA蜡烛图部分 =====
+// 参数说明：已调整为与TradingView一致的数值
+// 注意：Aicoin不支持WMA，全部使用EMA替代，会有细微差异
+bull = "green" // 上涨颜色
+bear = "red" // 下跌颜色
+ma_source = close // MA源数据
+ma_length = 100 // MA长度 (TradingView使用WMA 100)
+
+// 计算HAMA主MA线
+ma = ema(ma_source, ma_length)
+
+// HAMA蜡烛图参数
+WickColor = "gray"
+OpenLength = 45 // 开盘价EMA周期
+HighLength = 20 // 最高价EMA周期
+LowLength = 20 // 最低价EMA周期
+CloseLength = 40 // 收盘价EMA周期 (TradingView使用WMA 40)
+
+// 计算HAMA蜡烛图源数据
+SourceOpen = (open[1] + close[1]) / 2
+SourceHigh = high > close ? high : close
+SourceLow = low < close ? low : close
+SourceClose = (open + high + low + close) / 4
+
+// 计算HAMA蜡烛图 (全部使用EMA)
+CandleOpen = ema(SourceOpen, OpenLength)
+CandleHigh = ema(SourceHigh, HighLength)
+CandleLow = ema(SourceLow, LowLength)
+CandleClose = ema(SourceClose, CloseLength)
+
+// 绘制HAMA蜡烛图
+BodyColor = CandleOpen > CandleOpen[1] ? bull : bear
+plotcandle(CandleOpen, CandleHigh, CandleLow, CandleClose, title="HAMA Candles", color=BodyColor, wickcolor=WickColor)
+
+// 绘制HAMA MA线
+plot(ma, "HAMA MA", color=BodyColor, linewidth=2)
+
+// ===== HAMA交叉信号 =====
+hama_cross_up = crossover(CandleClose, ma)
+hama_cross_down = crossunder(CandleClose, ma)
+
+// 绘制交叉信号
+plotshape(hama_cross_up, title="涨信号", text="涨", style=shape.arrowup, location=location.belowbar, color="green", size=size.small)
+plotshape(hama_cross_down, title="跌信号", text="跌", style=shape.arrowdown, location=location.abovebar, color="red", size=size.small)
+
+// ===== 布林带状态 =====
+bb_width = (upper - lower) / basis
+bb_squeeze = bb_width < 0.1 // 布林带收缩
+bb_expansion = bb_width > 0.15 // 布林带扩张
+
+// 绘制布林带状态
+plotshape(bb_squeeze, title="布林带收缩", text="收", style=shape.diamond, location=location.belowbar, color="orange", size=size.tiny)
+plotshape(bb_expansion, title="布林带扩张", text="扩", style=shape.diamond, location=location.abovebar, color="blue", size=size.tiny)
+
+// ===== MA趋势信号 =====
+hama_rising = ma > ma[1]
+hama_falling = ma < ma[1]
+
+plotshape(hama_rising, title="MA上升", text="↑", style=shape.triangleup, location=location.belowbar, color="teal", size=size.tiny)
+plotshape(hama_falling, title="MA下降", text="↓", style=shape.triangledown, location=location.abovebar, color="maroon", size=size.tiny)

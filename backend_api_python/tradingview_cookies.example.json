@@ -1,0 +1,32 @@
+{
+  "description": "TradingView Cookies 配置示例",
+  "instructions": [
+    "1. 在 Chrome 浏览器中登录 TradingView",
+    "2. 打开开发者工具 (F12)",
+    "3. 访问 Application → Cookies → https://www.tradingview.com",
+    "4. 复制所有 cookies 到下面的 'cookies' 数组中",
+    "5. 将此文件重命名为 tradingview_cookies.json 并放到 backend_api_python/ 目录"
+  ],
+  "cookies": [
+    {
+      "name": "sessionid",
+      "value": "your_session_id_here",
+      "domain": ".tradingview.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sessionid_sign",
+      "value": "your_sessionid_sign_here",
+      "domain": ".tradingview.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ]
+}

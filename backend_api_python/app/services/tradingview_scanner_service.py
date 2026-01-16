@@ -346,11 +346,22 @@ class TradingViewScannerAPI:
 
         result = gainers[:limit]
 
-        # 自动记录到涨幅榜统计
+        # 自动记录到涨幅榜统计（包含完整信息）
         try:
             from app.services.gainer_tracker import record_gainer_appearance
-            symbols = [coin['symbol'] for coin in result]
-            record_gainer_appearance(symbols)
+
+            # 构造包含完整信息的涨幅数据
+            gainer_data = []
+            for i, coin in enumerate(result):
+                gainer_data.append({
+                    'symbol': coin['symbol'],
+                    'price': coin.get('price'),
+                    'change_percentage': coin.get('change_percentage'),
+                    'volume': coin.get('volume'),
+                    'rank': i + 1  # 排名从1开始
+                })
+
+            record_gainer_appearance(gainer_data)
         except Exception as e:
             logger.warning(f"记录涨幅榜统计失败: {e}")
 

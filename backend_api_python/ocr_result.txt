@@ -1,0 +1,49 @@
+[33mChecking connectivity to the model hosters, this may take a while. To bypass this check, set `DISABLE_MODEL_SOURCE_CHECK` to `True`.[0m
+��Ϣ: ���ṩ��ģʽ�޷��ҵ��ļ���
+C:\python\Lib\site-packages\paddle\utils\cpp_extension\extension_utils.py:718: UserWarning: No ccache found. Please be aware that recompiling all source files may be required. You can download and install ccache from: https://github.com/ccache/ccache/blob/master/doc/INSTALL.md
+  warnings.warn(warning_message)
+[32mCreating model: ('PP-LCNet_x1_0_doc_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_doc_ori`.[0m
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I0116 18:04:35.236742 28296 onednn_context.cc:81] oneDNN v3.6.2
+[32mCreating model: ('UVDoc', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\UVDoc`.[0m
+[32mCreating model: ('PP-LCNet_x1_0_textline_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_textline_ori`.[0m
+[32mCreating model: ('PP-OCRv5_server_det', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-OCRv5_server_det`.[0m
+[32mCreating model: ('en_PP-OCRv5_mobile_rec', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\en_PP-OCRv5_mobile_rec`.[0m
+D:\github\QuantDinger\backend_api_python\test_screenshot_ocr.py:38: DeprecationWarning: Please use `predict` instead.
+  result = ocr.ocr(img_path)
+======================================================================
+TradingView 图表 OCR 识别测试
+======================================================================
+
+测试图片: BTCUSDT_15m_widget.png
+文件大小: 74.2 KB
+----------------------------------------------------------------------
+
+初始化 PaddleOCR (英文模型)...
+✅ 就绪
+
+开始识别...
+
+✅ 识别到 4 个文本块
+
+======================================================================
+识别结果:
+======================================================================
+
+ 1. / TetherUS · 15 · Binance•
+ 2. 095,571.08 H95,571.09 L95,526.44 C95,526.45 -44.63 (-0.05%)
+ 3. ]T
+ 4. I
+
+完整文本 (前500字符):
+----------------------------------------------------------------------
+/ TetherUS · 15 · Binance• 095,571.08 H95,571.09 L95,526.44 C95,526.45 -44.63 (-0.05%) ]T I
+
+发现的价格数据: ['15', '095,57', '1.08', '95,57', '1.09', '95,52', '6.44', '95,52', '6.45', '44.63', '0.05']
+
+======================================================================

@@ -65,6 +65,20 @@ export const asyncRouterMap = [
         component: () => import('@/views/tradingview-scanner'),
         meta: { title: 'menu.tradingviewScanner', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
       },
+      // 涨幅榜历史
+      {
+        path: '/gainer-history',
+        name: 'GainerHistory',
+        component: () => import('@/views/gainer-history'),
+        meta: { title: 'menu.gainerHistory', keepAlive: true, icon: 'history', permission: ['dashboard'] }
+      },
+      // HAMA 行情
+      {
+        path: '/hama-market',
+        name: 'HamaMarket',
+        component: () => import('@/views/hama-market'),
+        meta: { title: 'menu.hamaMarket', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
+      },
       // 系统设置
       {
         path: '/settings',

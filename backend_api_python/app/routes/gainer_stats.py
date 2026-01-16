@@ -109,6 +109,97 @@ def get_today_appearances():
         }), 500
 
 
+@gainer_stats_bp.route('/history', methods=['GET'])
+def get_history():
+    """
+    获取涨幅榜历史数据（使用新的数据结构）
+
+    参数:
+        days: 查询最近多少天,默认7
+    """
+    try:
+        from datetime import datetime, timedelta
+        days = int(request.args.get('days', 7))
+
+        logger.info(f"获取最近{days}天的涨幅榜历史数据")
+
+        tracker = get_gainer_tracker()
+
+        # 使用新方法获取所有币种的历史记录
+        all_symbols_history = tracker.get_all_symbols_history(days=days, min_appearances=1)
+
+        # 构造每日数据
+        daily_history = {}
+        for symbol_data in all_symbols_history:
+            symbol = symbol_data['symbol']
+
+            for appearance in symbol_data['appearances']:
+                date = appearance['date']
+
+                if date not in daily_history:
+                    daily_history[date] = {
+                        'date': date,
+                        'symbols': [],
+                        'symbolDetails': []
+                    }
+
+                # 添加到每日记录
+                daily_history[date]['symbols'].append(symbol)
+                daily_history[date]['symbolDetails'].append({
+                    'symbol': symbol,
+                    'count': symbol_data['total_appearances'],
+                    'price': appearance.get('price'),
+                    'changePercentage': appearance.get('change_percentage'),
+                    'volume': appearance.get('volume'),
+                    'rank': appearance.get('rank')
+                })
+
+        # 按日期排序并构造返回数据
+        history = []
+        for i in range(days):
+            date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+
+            if date in daily_history:
+                day_data = daily_history[date]
+
+                # 按排名排序
+                day_data['symbolDetails'].sort(
+                    key=lambda x: (x['rank'] if x['rank'] is not None else 999)
+                )
+
+                history.append({
+                    'date': date,
+                    'count': len(day_data['symbols']),
+                    'symbols': day_data['symbols'],
+                    'symbolDetails': day_data['symbolDetails']
+                })
+
+        # 构造排行榜数据
+        ranking = []
+        for symbol_data in all_symbols_history[:100]:
+            ranking.append({
+                'symbol': symbol_data['symbol'],
+                'total_count': symbol_data['total_appearances'],
+                'percentage': round(symbol_data['total_appearances'] / days * 100, 1)
+            })
+
+        return jsonify({
+            'code': 1,
+            'msg': 'success',
+            'data': {
+                'daily': history,
+                'ranking': ranking
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取历史数据失败: {e}", exc_info=True)
+        return jsonify({
+            'code': 0,
+            'msg': f"获取历史数据失败: {str(e)}"
+        }), 500
+
+
 @gainer_stats_bp.route('/record', methods=['POST'])
 def record_appearances():
     """
