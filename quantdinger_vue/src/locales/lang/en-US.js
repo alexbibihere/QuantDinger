@@ -1998,7 +1998,26 @@ const locale = {
   'settings.field.SEARCH_GOOGLE_API_KEY': 'Google API Key',
   'settings.field.SEARCH_GOOGLE_CX': 'Google CX',
   'settings.field.SEARCH_BING_API_KEY': 'Bing API Key',
-  'settings.field.INTERNAL_API_KEY': 'Internal API Key'
+  'settings.field.INTERNAL_API_KEY': 'Internal API Key',
+  // TradingView HAMA Test
+  'menu.tvHamaTest': 'HAMA Chart Test',
+  'tvHamaTest.title': 'TradingView HAMA Chart Test',
+  'tvHamaTest.subtitle': 'TradingView-style HAMA chart based on klinecharts with Bollinger Bands and MA line',
+  'tvHamaTest.symbol': 'Symbol',
+  'tvHamaTest.market': 'Market',
+  'tvHamaTest.timeframe': 'Timeframe',
+  'tvHamaTest.theme': 'Theme',
+  'tvHamaTest.realtime': 'Realtime Update',
+  'tvHamaTest.refresh': 'Refresh Data',
+  'tvHamaTest.reset': 'Reset Settings',
+  'tvHamaTest.currentPrice': 'Current Price',
+  'tvHamaTest.change': 'Change',
+  'tvHamaTest.updateTime': 'Update Time',
+  'tvHamaTest.description': 'HAMA Chart Usage Guide',
+  'tvHamaTest.features': 'Features',
+  'tvHamaTest.shortcuts': 'Shortcuts',
+  'tvHamaTest.notes': 'Notes',
+  'tvHamaTest.support': 'Technical Support'
 }
 
 export default {

@@ -78,9 +78,17 @@ class CryptoDataSource(BaseDataSource):
         try:
             ccxt_timeframe = self.TIMEFRAME_MAP.get(timeframe, '1d')
             
-            # 构建交易对符号
-            if not symbol.endswith('USDT') and not symbol.endswith('USD'):
-                symbol_pair = f'{symbol}/USDT'
+            # 构建交易对符号（CCXT 需要 BASE/QUOTE 格式）
+            if '/' not in symbol:
+                # 如果符号中没有斜杠，需要转换
+                if symbol.endswith('USDT'):
+                    base = symbol[:-4]  # 去掉 USDT (4个字符)
+                    symbol_pair = f'{base}/USDT'
+                elif symbol.endswith('USD'):
+                    base = symbol[:-3]  # 去掉 USD (3个字符)
+                    symbol_pair = f'{base}/USD'
+                else:
+                    symbol_pair = f'{symbol}/USDT'
             else:
                 symbol_pair = symbol
             

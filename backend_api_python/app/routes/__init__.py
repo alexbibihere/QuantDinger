@@ -32,6 +32,7 @@ def register_routes(app: Flask):
     from app.routes.tradingview_pyppeteer import tradingview_pyppeteer_bp
     from app.routes.tradingview_playwright import tradingview_playwright_bp
     from app.routes.hama_indicator import hama_bp
+    app.register_blueprint(hama_bp, url_prefix='/api/hama-indicator')
     from app.routes.hama_vision import hama_vision_bp
     from app.routes.hama_ocr import hama_ocr_bp
     from app.routes.hama_market import hama_market_bp
@@ -72,8 +73,10 @@ def register_routes(app: Flask):
     app.register_blueprint(tradingview_hama_bp, url_prefix='/api/tradingview-hama')
     app.register_blueprint(tradingview_pyppeteer_bp, url_prefix='/api/tradingview-pyppeteer')
     app.register_blueprint(tradingview_playwright_bp, url_prefix='/api/tradingview-playwright')
-    app.register_blueprint(hama_bp)
     app.register_blueprint(hama_vision_bp)
     app.register_blueprint(hama_ocr_bp)
-    app.register_blueprint(hama_market_bp)
+    app.register_blueprint(hama_market_bp, url_prefix='/api/hama-market')
 
+    # 添加静态文件 Blueprint
+    from app.routes.static_files import bp as static_files_bp
+    app.register_blueprint(static_files_bp, url_prefix='')  # 注册在根路径

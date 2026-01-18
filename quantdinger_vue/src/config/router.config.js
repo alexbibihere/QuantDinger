@@ -79,6 +79,13 @@ export const asyncRouterMap = [
         component: () => import('@/views/hama-market'),
         meta: { title: 'menu.hamaMarket', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
       },
+      // TradingView HAMA 图表测试
+      {
+        path: '/tv-hama-test',
+        name: 'TvHamaTest',
+        component: () => import('@/views/tv-hama-test'),
+        meta: { title: 'menu.tvHamaTest', keepAlive: true, icon: 'experiment', permission: ['dashboard'] }
+      },
       // 系统设置
       {
         path: '/settings',
@@ -163,25 +170,7 @@ export const asyncRouterMap = [
  * @type { *[] }
  */
 export const constantRouterMap = [
-  {
-    path: '/user',
-    component: UserLayout,
-    redirect: '/user/login',
-    hidden: true,
-    children: [
-      {
-        path: 'login',
-        name: 'login',
-        component: () => import(/* webpackChunkName: "user" */ '@/views/user/Login')
-      },
-      {
-        path: 'recover',
-        name: 'recover',
-        component: undefined
-      }
-    ]
-  },
-
+  // 登录页面已移除，应用可直接访问
   {
     path: '/404',
     component: () => import(/* webpackChunkName: "fail" */ '@/views/exception/404')

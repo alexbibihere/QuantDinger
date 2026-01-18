@@ -18,6 +18,7 @@ _redis_client = None
 _hama_scheduler = None
 _tv_cache_manager = None
 _tv_scheduler = None
+_hama_brave_monitor = None
 
 
 def get_trading_executor():
@@ -236,6 +237,86 @@ def get_redis_client():
     return _redis_client
 
 
+def get_hama_brave_monitor():
+    """获取HAMA Brave监控器"""
+    global _hama_brave_monitor
+    return _hama_brave_monitor
+
+
+def init_hama_brave_monitor():
+    """
+    初始化HAMA Brave监控器
+    """
+    import os
+
+    # 检查是否启用Brave监控
+    brave_monitor_enabled = os.getenv('BRAVE_MONITOR_ENABLED', 'true').lower() == 'true'
+
+    if not brave_monitor_enabled:
+        logger.info("HAMA Brave监控已禁用 (BRAVE_MONITOR_ENABLED=false)")
+        return None
+
+    try:
+        from app.services.hama_brave_monitor import get_brave_monitor
+
+        # 缓存有效期
+        cache_ttl = int(os.getenv('BRAVE_MONITOR_CACHE_TTL', 900))  # 默认15分钟
+
+        # 初始化监控器 (使用 SQLite)
+        _brave_monitor = get_brave_monitor(redis_client=_redis_client, cache_ttl=cache_ttl, use_sqlite=True)
+
+        logger.info(f"HAMA Brave监控器初始化完成, TTL={cache_ttl}秒, SQLite=启用")
+
+        # 检查是否自动启动持续监控
+        auto_start = os.getenv('BRAVE_MONITOR_AUTO_START', 'false').lower() == 'true'
+
+        if auto_start:
+            # 监控间隔（秒）
+            interval = int(os.getenv('BRAVE_MONITOR_INTERVAL', '600'))  # 默认10分钟
+
+            # 监控币种列表
+            symbols_str = os.getenv('BRAVE_MONITOR_SYMBOLS', '')
+            symbols = [s.strip() for s in symbols_str.split(',') if s.strip()] if symbols_str else None
+
+            # 浏览器类型
+            browser_type = os.getenv('BRAVE_MONITOR_BROWSER_TYPE', 'brave')
+
+            # 使用默认币种列表（如果未指定）
+            if not symbols:
+                symbols = [
+                    'BTCUSDT',
+                    'ETHUSDT',
+                    'BNBUSDT',
+                    'SOLUSDT',
+                    'XRPUSDT',
+                    'ADAUSDT',
+                    'DOGEUSDT',
+                    'AVAXUSDT',
+                    'DOTUSDT',
+                    'LINKUSDT'
+                ]
+
+            logger.info(f"自动启动Brave持续监控: 币种={len(symbols)}个, 间隔={interval}秒")
+
+            # 启动持续监控（后台线程）
+            import threading
+            monitor_thread = threading.Thread(
+                target=_brave_monitor.start_monitoring,
+                args=(symbols, interval, browser_type),
+                daemon=True,
+                name='BraveMonitorThread'
+            )
+            monitor_thread.start()
+
+            logger.info("✅ Brave持续监控已在后台启动")
+
+        return _brave_monitor
+
+    except Exception as e:
+        logger.error(f"初始化HAMA Brave监控器失败: {e}")
+        return None
+
+
 def get_hama_scheduler():
     """获取HAMA调度器"""
     global _hama_scheduler
@@ -392,9 +473,9 @@ def create_app(config_name='default'):
     Returns:
         Flask app
     """
-    global _redis_client, _hama_scheduler, _tv_cache_manager, _tv_scheduler
+    global _redis_client, _hama_scheduler, _tv_cache_manager, _tv_scheduler, _hama_brave_monitor
 
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=None)  # 禁用默认静态文件夹
 
     app.config['JSON_AS_ASCII'] = False
 
@@ -416,14 +497,30 @@ def create_app(config_name='default'):
         # 3. 启动HAMA定时任务
         start_hama_scheduler()
 
-        # 4. 初始化并启动TradingView定时任务
-        init_tv_cache_manager()
-        start_tv_scheduler()
+        # 4. 初始化HAMA Brave监控器
+        _hama_brave_monitor = init_hama_brave_monitor()
 
-        # 5. 启动实时价格服务(使用默认列表,不阻塞启动)
+        # 5. 启动 HAMA 监控 Worker (后台自动监控)
         import os
-        enable_realtime_price = os.getenv('ENABLE_REALTIME_PRICE', 'true').lower() == 'true'
-        if enable_realtime_price:
+        enable_hama_worker = os.getenv('ENABLE_HAMA_WORKER', 'true').lower() == 'true'
+        if enable_hama_worker and _hama_brave_monitor:
+            try:
+                from app.services.hama_monitor_worker import get_hama_monitor_worker
+                worker = get_hama_monitor_worker()
+                worker.start()
+                logger.info("✅ HAMA 监控 Worker 已启动 (后台自动监控)")
+            except Exception as e:
+                logger.error(f"启动 HAMA 监控 Worker 失败: {e}")
+
+        # 6. 初始化并启动TradingView定时任务（暂时禁用）
+        # init_tv_cache_manager()
+        # start_tv_scheduler()
+
+        # 6. 启动实时价格服务(暂时禁用)
+        import os
+        # 暂时禁用实时价格服务和 SSE
+        enable_realtime_price = False  # os.getenv('ENABLE_REALTIME_PRICE', 'true').lower() == 'true'
+        if False:  # enable_realtime_price
             try:
                 from app.services.realtime_price import start_realtime_price_service
                 from app.services.price_broadcaster import get_price_broadcaster

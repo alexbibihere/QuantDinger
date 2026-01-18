@@ -136,61 +136,46 @@
           <span class="price-value">{{ formatPrice(text) }}</span>
         </template>
 
-        <!-- HAMA 开盘 -->
-        <template slot="hama_open" slot-scope="text">
-          <span class="hama-value">{{ formatPrice(text) }}</span>
-        </template>
-
-        <!-- HAMA 收盘 -->
-        <template slot="hama_close" slot-scope="text">
-          <span class="hama-value">{{ formatPrice(text) }}</span>
-        </template>
-
-        <!-- HAMA MA -->
-        <template slot="hama_ma" slot-scope="text">
-          <span class="ma-value">{{ formatPrice(text) }}</span>
+        <!-- HAMA 状态 -->
+        <template slot="hama_status" slot-scope="text, record">
+          <div v-if="record.hama_brave" class="hama-brave-status">
+            <a-tag
+              :color="record.hama_brave.hama_color === 'green' ? 'green' : 'red'"
+              style="margin-bottom: 4px"
+            >
+              <a-icon :type="record.hama_brave.hama_trend === 'up' ? 'arrow-up' : 'arrow-down'" />
+              {{ record.hama_brave.hama_trend === 'up' ? '上涨' : record.hama_brave.hama_trend === 'down' ? '下跌' : '盘整' }}
+            </a-tag>
+            <div style="font-size: 11px; color: #999">
+              HAMA: {{ formatPrice(record.hama_brave.hama_value) }}
+            </div>
+          </div>
+          <a-tag v-else color="default" style="font-size: 11px">
+            暂无数据
+          </a-tag>
         </template>
 
         <!-- 趋势 -->
         <template slot="trend" slot-scope="text, record">
-          <a-tag :color="getTrendColor(record.hama)">
-            <a-icon :type="getTrendIcon(record.hama)" />
-            {{ getTrendText(record.hama) }}
+          <a-tag v-if="record.trend" :color="record.trend.direction === 'up' ? 'green' : 'red'">
+            <a-icon :type="record.trend.direction === 'up' ? 'arrow-up' : 'arrow-down'" />
+            {{ record.trend.direction === 'up' ? '上涨' : record.trend.direction === 'down' ? '下跌' : '盘整' }}
           </a-tag>
+          <span v-else style="color: #999">-</span>
         </template>
 
-        <!-- 交叉信号 -->
-        <template slot="cross_signal" slot-scope="text, record">
-          <template v-if="record.hama.cross_up">
-            <a-tag color="green" style="animation: pulse 2s infinite">
-              <a-icon type="arrow-up" />
-              {{ $t('hamaMarket.goldenCross') }}
+        <!-- 最近监控 -->
+        <template slot="last_cross" slot-scope="text, record">
+          <div v-if="record.hama_brave" class="last-cross">
+            <a-tag color="blue" style="margin-bottom: 4px">
+              <a-icon type="clock-circle" />
+              已监控
             </a-tag>
-          </template>
-          <template v-else-if="record.hama.cross_down">
-            <a-tag color="red" style="animation: pulse 2s infinite">
-              <a-icon type="arrow-down" />
-              {{ $t('hamaMarket.deathCross') }}
-            </a-tag>
-          </template>
-          <template v-else>
-            <span style="color: #999">-</span>
-          </template>
-        </template>
-
-        <!-- 布林带状态 -->
-        <template slot="bb_status" slot-scope="text, record">
-          <div class="bb-status">
-            <div style="font-size: 12px; color: #666">
-              上: {{ formatPrice(record.bollinger_bands.upper) }}
-            </div>
-            <div style="font-size: 12px; color: #666">
-              下: {{ formatPrice(record.bollinger_bands.lower) }}
-            </div>
-            <div style="font-size: 12px; color: #666">
-              宽: {{ (record.bollinger_bands.width * 100).toFixed(2) }}%
+            <div v-if="record.hama_brave.cached_at || record.hama_brave.timestamp" style="font-size: 11px; color: #999">
+              {{ formatTimestamp(record.hama_brave.cached_at || record.hama_brave.timestamp) }}
             </div>
           </div>
+          <span v-else style="color: #999; font-size: 12px">暂未监控</span>
         </template>
 
         <!-- 操作 -->
@@ -259,8 +244,9 @@ export default {
     },
     statistics () {
       const total = this.watchlist.length
-      const up = this.watchlist.filter(item => item.trend.direction === 'up').length
-      const down = this.watchlist.filter(item => item.trend.direction === 'down').length
+      // 使用 hama_brave.hama_color 判断趋势
+      const up = this.watchlist.filter(item => item.hama_brave && item.hama_brave.hama_color === 'green').length
+      const down = this.watchlist.filter(item => item.hama_brave && item.hama_brave.hama_color === 'red').length
       return { total, up, down }
     },
     columns () {
@@ -282,28 +268,11 @@ export default {
           align: 'right'
         },
         {
-          title: 'HAMA Open',
-          dataIndex: ['hama', 'open'],
-          key: 'hama_open',
-          scopedSlots: { customRender: 'hama_open' },
-          width: 120,
-          align: 'right'
-        },
-        {
-          title: 'HAMA Close',
-          dataIndex: ['hama', 'close'],
-          key: 'hama_close',
-          scopedSlots: { customRender: 'hama_close' },
-          width: 120,
-          align: 'right'
-        },
-        {
-          title: 'HAMA MA',
-          dataIndex: ['hama', 'ma'],
-          key: 'hama_ma',
-          scopedSlots: { customRender: 'hama_ma' },
-          width: 120,
-          align: 'right'
+          title: 'HAMA 状态',
+          key: 'hama_status',
+          scopedSlots: { customRender: 'hama_status' },
+          width: 150,
+          align: 'center'
         },
         {
           title: this.$t('hamaMarket.trend'),
@@ -313,17 +282,11 @@ export default {
           align: 'center'
         },
         {
-          title: this.$t('hamaMarket.crossSignal'),
-          key: 'cross_signal',
-          scopedSlots: { customRender: 'cross_signal' },
-          width: 120,
+          title: '最近监控',
+          key: 'last_cross',
+          scopedSlots: { customRender: 'last_cross' },
+          width: 150,
           align: 'center'
-        },
-        {
-          title: this.$t('hamaMarket.bollingerBands'),
-          key: 'bb_status',
-          scopedSlots: { customRender: 'bb_status' },
-          width: 150
         },
         {
           title: this.$t('common.action'),

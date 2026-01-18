@@ -129,6 +129,11 @@ const vueConfig = {
         target: 'http://localhost:5000',
         ws: true,
         changeOrigin: true
+      },
+      '/screenshot': {
+        target: 'http://localhost:5000/screenshot',
+        ws: true,
+        changeOrigin: true
       }
     }
   },

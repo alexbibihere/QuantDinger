@@ -3,8 +3,10 @@
 """
 HAMA OCR 识别 API 路由
 
-使用本地 OCR（PaddleOCR/Tesseract/EasyOCR）识别 TradingView 图表中的 HAMA 指标
+使用本地 OCR（RapidOCR/PaddleOCR/Tesseract/EasyOCR）识别 TradingView 图表中的 HAMA 指标
 完全免费，无需 API 密钥！
+
+默认使用 RapidOCR（速度快，准确率高，兼容性好）
 """
 from flask import Blueprint, jsonify, request
 from app.services.hama_ocr_extractor import extract_hama_with_ocr
@@ -26,7 +28,7 @@ def extract_hama():
         "chart_url": "https://cn.tradingview.com/chart/U1FY2qxO/",  // 可选
         "symbol": "BTCUSDT",  // 可选
         "interval": "15",  // 可选
-        "ocr_engine": "paddleocr"  // 可选: paddleocr/tesseract/easyocr
+        "ocr_engine": "rapidocr"  // 可选: rapidocr/paddleocr/tesseract/easyocr
     }
 
     返回 (JSON):
@@ -55,7 +57,7 @@ def extract_hama():
         chart_url = data.get('chart_url')
         symbol = data.get('symbol', 'BTCUSDT')
         interval = data.get('interval', '15')
-        ocr_engine = data.get('ocr_engine', 'paddleocr')
+        ocr_engine = data.get('ocr_engine', 'rapidocr')
 
         logger.info(f"开始 OCR 识别: symbol={symbol}, interval={interval}, "
                    f"chart_url={chart_url}, ocr_engine={ocr_engine}")
@@ -98,6 +100,12 @@ def health():
     available_engines = []
 
     try:
+        import rapidocr_onnxruntime
+        available_engines.append('rapidocr')
+    except ImportError:
+        pass
+
+    try:
         import paddleocr
         available_engines.append('paddleocr')
     except ImportError:
@@ -120,5 +128,5 @@ def health():
         'service': 'HAMA OCR API',
         'status': 'running',
         'available_engines': available_engines,
-        'default_engine': 'paddleocr' if 'paddleocr' in available_engines else available_engines[0] if available_engines else None
+        'default_engine': 'rapidocr' if 'rapidocr' in available_engines else available_engines[0] if available_engines else None
     })

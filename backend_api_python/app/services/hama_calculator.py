@@ -21,19 +21,19 @@ class HAMACalculator:
 
     def __init__(self):
         """初始化 HAMA 计算器"""
-        # HAMA 参数（与 Pine Script 一致）
+        # HAMA 参数（与 Pine Script 完全一致）
         self.open_length = 45  # 开盘价 EMA 周期
         self.high_length = 20  # 最高价 EMA 周期
         self.low_length = 20   # 最低价 EMA 周期
-        self.close_length = 40  # 收盘价 EMA 周期
-        self.ma_length = 100    # MA 长度
+        self.close_length = 40  # 收盘价 WMA 周期（注意：WMA）
+        self.ma_length = 100    # MA WMA 长度（注意：WMA）
 
         # 布林带参数
-        self.bb_length = 400   # 布林带周期
+        self.bb_length = 400   # 布林带 SMA 周期（注意：SMA）
         self.bb_mult = 2.0     # 标准差倍数
 
-        logger.info(f"HAMA 计算器初始化: Open={self.open_length}, High={self.high_length}, "
-                   f"Low={self.low_length}, Close={self.close_length}, MA={self.ma_length}")
+        logger.info(f"HAMA 计算器初始化: Open=EMA({self.open_length}), High=EMA({self.high_length}), "
+                   f"Low=EMA({self.low_length}), Close=WMA({self.close_length}), MA=WMA({self.ma_length}), BB=SMA({self.bb_length})")
 
     def calculate_ema(self, data: pd.Series, period: int) -> pd.Series:
         """
@@ -47,6 +47,36 @@ class HAMACalculator:
             EMA 序列
         """
         return data.ewm(span=period, adjust=False).mean()
+
+    def calculate_wma(self, data: pd.Series, period: int) -> pd.Series:
+        """
+        计算加权移动平均线 (WMA)
+
+        Args:
+            data: 价格序列
+            period: WMA 周期
+
+        Returns:
+            WMA 序列
+        """
+        weights = np.arange(1, period + 1)
+        return data.rolling(window=period).apply(
+            lambda x: np.dot(x, weights) / weights.sum() if len(x) == period else np.nan,
+            raw=True
+        )
+
+    def calculate_sma(self, data: pd.Series, period: int) -> pd.Series:
+        """
+        计算简单移动平均线 (SMA)
+
+        Args:
+            data: 价格序列
+            period: SMA 周期
+
+        Returns:
+            SMA 序列
+        """
+        return data.rolling(window=period).mean()
 
     def calculate_hama(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -81,10 +111,10 @@ class HAMACalculator:
         df['hama_open'] = self.calculate_ema(df['source_open'], self.open_length)
         df['hama_high'] = self.calculate_ema(df['source_high'], self.high_length)
         df['hama_low'] = self.calculate_ema(df['source_low'], self.low_length)
-        df['hama_close'] = self.calculate_ema(df['source_close'], self.close_length)
+        df['hama_close'] = self.calculate_wma(df['source_close'], self.close_length)  # 使用 WMA
 
-        # 3. 计算 HAMA MA 线
-        df['hama_ma'] = self.calculate_ema(df['close'], self.ma_length)
+        # 3. 计算 HAMA MA 线（使用 WMA，与 Pine Script 一致）
+        df['hama_ma'] = self.calculate_wma(df['close'], self.ma_length)
 
         # 4. 判断颜色/趋势
         # 如果 HAMA Open > 前一根 HAMA Open，则为绿色（上涨），否则为红色（下跌）
@@ -109,8 +139,8 @@ class HAMACalculator:
             (df['hama_close'].shift(1) >= df['hama_ma'].shift(1))
         )
 
-        # 6. 计算布林带
-        df['bb_basis'] = self.calculate_ema(df['close'], self.bb_length)
+        # 6. 计算布林带（使用 SMA，与 Pine Script 一致）
+        df['bb_basis'] = self.calculate_sma(df['close'], self.bb_length)
         df['bb_dev'] = df['close'].rolling(window=self.bb_length).std()
         df['bb_upper'] = df['bb_basis'] + df['bb_dev'] * self.bb_mult
         df['bb_lower'] = df['bb_basis'] - df['bb_dev'] * self.bb_mult

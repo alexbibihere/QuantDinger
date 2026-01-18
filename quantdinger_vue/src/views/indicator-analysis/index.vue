@@ -1853,6 +1853,7 @@ getMarketColor,
 .chart-right {
   width: 30% !important;
   flex: 0 0 30% !important;
+  height: 600px;
   background: #fff;
   display: flex;
   flex-direction: column;

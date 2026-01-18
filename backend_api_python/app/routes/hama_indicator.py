@@ -107,6 +107,104 @@ def calculate_hama():
         }), 500
 
 
+@hama_bp.route('/latest', methods=['GET'])
+def get_latest_hama():
+    """
+    获取指定币种和时间周期的最新 HAMA 指标
+
+    查询参数:
+        symbol: 币种符号 (例如: BTCUSDT)
+        interval: 时间周期 (例如: 15m, 1h, 1d)
+        limit: 数据条数 (可选，默认 500)
+
+    返回 (JSON):
+        {
+            "success": true,
+            "data": {
+                "symbol": "BTCUSDT",
+                "interval": "15m",
+                "timestamp": 1234567890000,
+                "close": 3000.0,
+                "hama": {
+                    ...
+                },
+                "bollinger_bands": {
+                    ...
+                },
+                "trend": {
+                    ...
+                }
+            }
+        }
+    """
+    try:
+        from app.services.kline import KlineService
+
+        symbol = request.args.get('symbol', 'BTCUSDT')
+        interval = request.args.get('interval', '15m')
+        limit = int(request.args.get('limit', 500))
+
+        logger.info(f"获取 {symbol} ({interval}) 最新 HAMA 指标")
+
+        # 使用 KlineService 获取 K线数据
+        kline_service = KlineService()
+        klines = kline_service.get_kline('Crypto', symbol, interval, limit)
+
+        if not klines or len(klines) < 100:
+            return jsonify({
+                'success': False,
+                'error': f'数据不足，至少需要 100 条 K线数据，当前: {len(klines) if klines else 0}'
+            }), 400
+
+        # 转换数据格式为 OHLCV 列表
+        ohlcv_data = []
+        for kline in klines:
+            ohlcv_data.append([
+                kline.get('time', 0),
+                kline.get('open', 0),
+                kline.get('high', 0),
+                kline.get('low', 0),
+                kline.get('close', 0),
+                kline.get('volume', 0)
+            ])
+
+        if not ohlcv_data or len(ohlcv_data) < 100:
+            return jsonify({
+                'success': False,
+                'error': f'数据不足，至少需要 100 条 K线数据'
+            }), 400
+
+        # 计算 HAMA 指标
+        result = calculate_hama_from_ohlcv(ohlcv_data)
+
+        if not result:
+            return jsonify({
+                'success': False,
+                'error': 'HAMA 指标计算失败'
+            }), 500
+
+        # 添加币种和时间周期信息
+        result['symbol'] = symbol
+        result['interval'] = interval
+
+        logger.info(f"{symbol} ({interval}) 最新 HAMA: close={result['close']:.2f}, "
+                   f"color={result['hama']['color']}, "
+                   f"cross_up={result['hama']['cross_up']}, "
+                   f"cross_down={result['hama']['cross_down']}")
+
+        return jsonify({
+            'success': True,
+            'data': result
+        })
+
+    except Exception as e:
+        logger.error(f"获取最新 HAMA 指标时发生错误: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @hama_bp.route('/health', methods=['GET'])
 def health():
     """健康检查"""

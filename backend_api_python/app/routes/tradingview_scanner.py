@@ -15,7 +15,9 @@ from app import get_tv_cache_manager
 from app.utils.logger import get_logger
 from app import get_redis_client
 from app.services.hama_calculator import calculate_hama_from_ohlcv
+from app.services.screenshot_cache import get_screenshot_cache
 import json
+import os
 import threading
 import time
 
@@ -80,18 +82,27 @@ def _set_hama_to_cache(symbol: str, hama_data: dict):
 
 
 def _get_screenshot_from_cache(symbol: str, interval: str = '15m') -> str:
-    """从 Redis 缓存获取截图 base64 数据"""
+    """从数据库缓存获取截图 base64 数据 (优先数据库,备用Redis)"""
     try:
+        # 优先从数据库获取
+        screenshot_cache = get_screenshot_cache()
+        cached_data = screenshot_cache.get_screenshot(symbol, interval)
+
+        if cached_data and cached_data.get('image_base64'):
+            logger.info(f"✅ {symbol} 从数据库缓存获取截图")
+            return cached_data['image_base64']
+
+        # 如果数据库没有,尝试从Redis获取 (兼容旧版本)
         redis_client = get_redis_client()
-        if not redis_client:
-            return None
+        if redis_client:
+            cache_key = f"chart_screenshot:{symbol}:{interval}"
+            cached_data = redis_client.get(cache_key)
 
-        cache_key = f"chart_screenshot:{symbol}:{interval}"
-        cached_data = redis_client.get(cache_key)
-
-        if cached_data:
-            logger.info(f"✅ {symbol} 从 Redis 缓存获取截图")
-            return cached_data.decode('utf-8')
+            if cached_data:
+                logger.info(f"✅ {symbol} 从 Redis 缓存获取截图 (备用)")
+                # 将Redis数据迁移到数据库
+                screenshot_cache.save_screenshot(symbol, interval, cached_data.decode('utf-8'))
+                return cached_data.decode('utf-8')
 
         return None
     except Exception as e:
@@ -99,24 +110,107 @@ def _get_screenshot_from_cache(symbol: str, interval: str = '15m') -> str:
         return None
 
 
-def _save_screenshot_to_cache(symbol: str, interval: str, image_base64: str) -> bool:
-    """保存截图 base64 数据到 Redis 缓存"""
+def _save_screenshot_to_cache(symbol: str, interval: str, image_base64: str,
+                              file_size: int = None, screenshot_url: str = None) -> bool:
+    """保存截图 base64 数据到数据库缓存 (同时保存到Redis作为快速缓存)"""
     try:
-        redis_client = get_redis_client()
-        if not redis_client:
-            return False
+        # 保存到数据库 (永久存储,直到手动清理)
+        screenshot_cache = get_screenshot_cache()
+        success = screenshot_cache.save_screenshot(symbol, interval, image_base64, file_size, screenshot_url)
 
-        cache_key = f"chart_screenshot:{symbol}:{interval}"
-        redis_client.setex(cache_key, _SCREENSHOT_CACHE_TTL, image_base64)
-        logger.info(f"✅ {symbol} 截图已缓存到 Redis (TTL: {_SCREENSHOT_CACHE_TTL}秒)")
-        return True
+        if success:
+            # 同时保存到Redis作为快速缓存 (TTL 10分钟)
+            redis_client = get_redis_client()
+            if redis_client:
+                cache_key = f"chart_screenshot:{symbol}:{interval}"
+                redis_client.setex(cache_key, _SCREENSHOT_CACHE_TTL, image_base64)
+                logger.info(f"✅ {symbol} 截图已缓存到数据库 + Redis (TTL: {_SCREENSHOT_CACHE_TTL}秒)")
+            else:
+                logger.info(f"✅ {symbol} 截图已缓存到数据库")
+
+        return success
     except Exception as e:
         logger.error(f"保存截图到缓存失败: {e}")
         return False
 
 
-def _capture_and_cache_screenshot(symbol: str, interval: str = '15') -> bool:
-    """截图并缓存到 Redis (不使用 OCR,仅截图)"""
+def _parse_cookie_string(cookie_string: str) -> list:
+    """
+    解析 cookie 字符串为 Playwright 所需的格式
+    
+    Args:
+        cookie_string: 从 CLAUDE.md 中读取的 cookie 字符串
+    
+    Returns:
+        格式化后的 cookie 列表
+    """
+    cookies = []
+    for cookie_pair in cookie_string.split(';'):
+        cookie_pair = cookie_pair.strip()
+        if not cookie_pair:
+            continue
+        if '=' in cookie_pair:
+            name, value = cookie_pair.split('=', 1)
+            cookies.append({
+                'name': name,
+                'value': value,
+                'domain': '.tradingview.com',
+                'path': '/',
+                'expires': -1,
+                'httpOnly': True,
+                'secure': True
+            })
+    return cookies
+
+
+def _get_tradingview_cookies() -> list:
+    """
+    从 CLAUDE.md 文件中获取 TradingView cookie
+    
+    Returns:
+        格式化后的 cookie 列表
+    """
+    try:
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        claude_md_path = os.path.join(project_root, 'CLAUDE.md')
+        
+        with open(claude_md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 查找 cookie 部分
+        cookie_start = content.find('# cookie')
+        if cookie_start == -1:
+            logger.warning("CLAUDE.md 中未找到 cookie 部分")
+            return []
+        
+        # 提取 cookie 字符串
+        cookie_section = content[cookie_start:]
+        cookie_lines = cookie_section.split('\n')
+        cookie_string = ''
+        for line in cookie_lines[1:]:
+            line = line.strip()
+            if line and not line.startswith('#') and not line.startswith('```'):
+                cookie_string = line
+                break
+        
+        if not cookie_string:
+            logger.warning("CLAUDE.md 中未找到有效的 cookie 字符串")
+            return []
+        
+        # 解析 cookie
+        cookies = _parse_cookie_string(cookie_string)
+        logger.info(f"✅ 从 CLAUDE.md 中加载了 {len(cookies)} 个 cookie")
+        return cookies
+    except Exception as e:
+        logger.error(f"读取或解析 cookie 失败: {e}")
+        return []
+
+
+def _capture_and_cache_screenshot(symbol: str, interval: str = '15') -> tuple[bool, str | None]:
+    """
+    截图并缓存到 Redis (不使用 OCR,仅截图)
+    """
     try:
         from playwright.sync_api import sync_playwright
         from playwright_stealth.stealth import Stealth
@@ -137,10 +231,17 @@ def _capture_and_cache_screenshot(symbol: str, interval: str = '15') -> bool:
         # 格式: https://s.tradingview.com/widgetembed/?frameElementId=tradingview_76d87&symbol=BINANCE%3ABTCUSDT&interval=15
         chart_url = f"https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=BINANCE:{symbol}&interval={tv_interval}&hidesidetoolbar=1&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&theme=light&style=1&timezone=Etc%2FUTC"
 
-        # 截图路径
-        screenshot_path = f"/tmp/{symbol}_{interval}_chart.png"
+        # 截图路径 - 修改为保存到项目根目录的 screenshot 目录
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        screenshot_dir = os.path.join(project_root, 'screenshot')
+        os.makedirs(screenshot_dir, exist_ok=True)
+        screenshot_path = os.path.join(screenshot_dir, f"{symbol}_{interval}_chart.png")
+        logger.info(f"截图将保存到: {screenshot_path}")
 
         logger.info(f"TradingView Widget URL: {chart_url}")
+
+        # 从 CLAUDE.md 获取 cookie
+        cookies = _get_tradingview_cookies()
 
         # 使用 Playwright 直接截图,不初始化 OCR
         with sync_playwright() as p:
@@ -162,6 +263,12 @@ def _capture_and_cache_screenshot(symbol: str, interval: str = '15') -> bool:
                 viewport={'width': 1920, 'height': 1080},
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
+            
+            # 设置 cookie
+            if cookies:
+                context.add_cookies(cookies)
+                logger.info(f"✅ 已设置 {len(cookies)} 个 TradingView cookie")
+            
             page = context.new_page()
 
             # 应用 stealth 模式
@@ -221,8 +328,8 @@ def _capture_and_cache_screenshot(symbol: str, interval: str = '15') -> bool:
             image_data = f.read()
             image_base64 = base64.b64encode(image_data).decode('utf-8')
 
-        # 保存到 Redis 缓存
-        _save_screenshot_to_cache(symbol, interval, image_base64)
+        # 保存到数据库 + Redis 缓存
+        _save_screenshot_to_cache(symbol, interval, image_base64, file_size, chart_url)
         logger.info(f"✅ {symbol} 截图并缓存成功 (大小: {file_size} bytes)")
         return True
 
@@ -897,6 +1004,7 @@ def get_chart_screenshot():
     Parameters:
         symbol: 币种符号 (如 BTCUSDT)
         interval: 时间周期 (默认 15m)
+        force_refresh: 强制刷新 (默认 false)
 
     Returns:
         JSON with screenshot base64 data
@@ -944,6 +1052,12 @@ def get_chart_screenshot():
                     'content_type': 'image/png',
                     'cached': False
                 })
+            else:
+                logger.error(f"❌ {symbol} 截图成功但缓存读取失败")
+                return jsonify({
+                    'success': False,
+                    'error': '截图成功但缓存读取失败'
+                }), 500
         else:
             logger.error(f"❌ {symbol} 截图失败")
             return jsonify({
@@ -953,6 +1067,62 @@ def get_chart_screenshot():
 
     except Exception as e:
         logger.error(f"获取图表截图失败: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@tradingview_scanner_bp.route('/screenshot-cache/stats', methods=['GET'])
+def get_screenshot_cache_stats():
+    """
+    获取截图缓存统计信息
+
+    Returns:
+        JSON with cache statistics
+    """
+    try:
+        screenshot_cache = get_screenshot_cache()
+        stats = screenshot_cache.get_stats()
+
+        return jsonify({
+            'success': True,
+            'data': stats
+        })
+    except Exception as e:
+        logger.error(f"获取截图缓存统计失败: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@tradingview_scanner_bp.route('/screenshot-cache/cleanup', methods=['POST'])
+def cleanup_screenshot_cache():
+    """
+    清理旧截图缓存
+
+    Parameters:
+        days: 保留天数 (默认 7)
+
+    Returns:
+        JSON with cleanup results
+    """
+    try:
+        from flask import request
+        data = request.get_json() or {}
+        days = data.get('days', 7)
+
+        screenshot_cache = get_screenshot_cache()
+        deleted_count = screenshot_cache.cleanup_old_screenshots(days)
+
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'已清理 {deleted_count} 条超过 {days} 天的截图'
+        })
+    except Exception as e:
+        logger.error(f"清理截图缓存失败: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

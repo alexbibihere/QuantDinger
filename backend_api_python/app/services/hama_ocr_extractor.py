@@ -4,9 +4,10 @@
 使用本地 OCR 识别 TradingView 图表中的 HAMA 指标
 
 支持：
-1. PaddleOCR（推荐）- 完全免费，支持中英文
-2. Tesseract OCR - 开源 OCR
-3. EasyOCR - 易用的 OCR 库
+1. RapidOCR（推荐）- 速度快，准确率高，兼容性好
+2. PaddleOCR - 完全免费，支持中英文
+3. Tesseract OCR - 开源 OCR
+4. EasyOCR - 易用的 OCR 库
 
 完全免费，无需 API 密钥！
 """
@@ -33,12 +34,12 @@ logger = get_logger(__name__)
 class HAMAOCRExtractor:
     """使用本地 OCR 识别 HAMA 指标"""
 
-    def __init__(self, ocr_engine: str = 'paddleocr'):
+    def __init__(self, ocr_engine: str = 'rapidocr'):
         """
         初始化 OCR 提取器
 
         Args:
-            ocr_engine: OCR 引擎类型 ('paddleocr', 'tesseract', 'easyocr')
+            ocr_engine: OCR 引擎类型 ('rapidocr', 'paddleocr', 'tesseract', 'easyocr')
         """
         self.ocr_engine = ocr_engine
         self.ocr = None
@@ -60,14 +61,105 @@ class HAMAOCRExtractor:
         try:
             with open(cookie_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            return config.get('cookies', [])
+
+            cookies_data = config.get('cookies')
+
+            # 如果是字符串格式,转换为 Playwright 需要的数组格式
+            if isinstance(cookies_data, str):
+                logger.info("检测到字符串格式 cookie,正在转换为 Playwright 格式...")
+                cookie_list = []
+                for cookie in cookies_data.split(';'):
+                    cookie = cookie.strip()
+                    if '=' in cookie:
+                        key, value = cookie.split('=', 1)
+                        cookie_list.append({
+                            'name': key,
+                            'value': value,
+                            'domain': '.tradingview.com',
+                            'path': '/'
+                        })
+                logger.info(f"✅ 成功转换 {len(cookie_list)} 个 cookies")
+                return cookie_list
+
+            # 如果已经是数组格式,直接返回
+            elif isinstance(cookies_data, list):
+                return cookies_data
+
+            return None
+
         except Exception as e:
             logger.error(f"加载 Cookie 失败: {e}")
             return None
 
+    def _load_tradingview_config(self) -> Optional[Dict[str, str]]:
+        """加载 TradingView 配置（账号密码）"""
+        config_file = os.path.join(
+            os.path.dirname(__file__),
+            '../../file/tradingview.txt'
+        )
+
+        if not os.path.exists(config_file):
+            logger.warning(f"TradingView 配置文件不存在: {config_file}")
+            return None
+
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            config = {}
+            for line in lines:
+                line = line.strip()
+                # 匹配格式: 账号 ：username 或 密码：password
+                if '账号' in line or 'username' in line.lower():
+                    # 提取账号
+                    if '：' in line:
+                        parts = line.split('：')
+                        if len(parts) > 1:
+                            config['username'] = parts[1].strip()
+                    elif ':' in line:
+                        parts = line.split(':')
+                        if len(parts) > 1:
+                            config['username'] = parts[1].strip()
+                elif '密码' in line or 'password' in line.lower():
+                    # 提取密码
+                    if '：' in line:
+                        parts = line.split('：')
+                        if len(parts) > 1:
+                            config['password'] = parts[1].strip()
+                    elif ':' in line:
+                        parts = line.split(':')
+                        if len(parts) > 1:
+                            config['password'] = parts[1].strip()
+
+            if config.get('username') and config.get('password'):
+                logger.info(f"✅ 成功加载 TradingView 配置: {config['username']}")
+                return config
+            else:
+                logger.warning("TradingView 配置文件中缺少账号或密码")
+                return None
+
+        except Exception as e:
+            logger.error(f"加载 TradingView 配置失败: {e}")
+            return None
+
     def _init_ocr(self):
         """初始化 OCR 引擎"""
-        if self.ocr_engine == 'paddleocr':
+        if self.ocr_engine == 'rapidocr':
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                logger.info("正在初始化 RapidOCR...")
+
+                self.ocr = RapidOCR()
+                logger.info("✅ RapidOCR 初始化成功")
+            except ImportError:
+                logger.warning("RapidOCR 未安装，尝试使用 PaddleOCR")
+                self.ocr_engine = 'paddleocr'
+                self._init_ocr()
+            except Exception as e:
+                logger.error(f"RapidOCR 初始化失败: {type(e).__name__}: {e}")
+                self.ocr = None
+
+        elif self.ocr_engine == 'paddleocr':
             try:
                 from paddleocr import PaddleOCR
                 logger.info("正在初始化 PaddleOCR (首次运行会下载模型文件,请耐心等待)...")
@@ -126,65 +218,230 @@ class HAMAOCRExtractor:
         if self.ocr is None:
             logger.warning("⚠️ 所有 OCR 引擎都初始化失败")
 
-    def capture_chart(self, chart_url: str, output_path: str = '/tmp/tradingview_chart.png') -> Optional[str]:
-        """截取 TradingView 图表"""
+    def capture_chart(self, chart_url: str, output_path: str = '/tmp/tradingview_chart.png', browser_type: str = 'chromium') -> Optional[str]:
+        """截取 TradingView 图表
+
+        Args:
+            chart_url: 图表 URL
+            output_path: 输出路径
+            browser_type: 浏览器类型 (chromium, firefox, webkit, brave)
+        """
         proxy_url = os.getenv('PROXY_URL') or os.getenv('ALL_PROXY') or os.getenv('HTTPS_PROXY')
         proxy_config = {'server': proxy_url, 'bypass': 'localhost,127.0.0.1'} if proxy_url else None
 
+        # 调试日志
+        logger.info(f"代理配置: proxy_url={repr(proxy_url)}, proxy_config={repr(proxy_config)}")
+
         try:
             with sync_playwright() as p:
-                logger.info(f"启动浏览器，访问图表: {chart_url}")
+                logger.info(f"启动浏览器 ({browser_type})，访问图表: {chart_url}")
 
-                browser = p.chromium.launch(
-                    headless=True,
-                    proxy=proxy_config,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        f'--proxy-server={proxy_url}' if proxy_url else ''
+                # 根据浏览器类型选择浏览器
+                if browser_type == 'firefox':
+                    browser = p.firefox.launch(
+                        headless=True,
+                        proxy=proxy_config if proxy_url else None
+                    )
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                    # 应用 stealth 模式
+                    stealth_config = Stealth()
+                    stealth_config.apply_stealth_sync(page)
+
+                    # 添加 cookies
+                    if self.cookies:
+                        context.add_cookies(self.cookies)
+
+                elif browser_type == 'webkit':
+                    browser = p.webkit.launch(
+                        headless=True
+                    )
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                    # 应用 stealth 模式
+                    stealth_config = Stealth()
+                    stealth_config.apply_stealth_sync(page)
+
+                    # 添加 cookies
+                    if self.cookies:
+                        context.add_cookies(self.cookies)
+
+                elif browser_type == 'brave':
+                    # 使用 Brave 浏览器（需要安装 Brave 并配置 Playwright 使用其可执行文件）
+                    # 使用独立的用户数据目录，避免与正在运行的 Brave 冲突
+                    brave_path = os.path.join(os.path.dirname(__file__), '..', 'brave_profile')
+                    os.makedirs(brave_path, exist_ok=True)
+
+                    # Windows 常见 Brave 路径
+                    brave_exe_paths = [
+                        r'C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe',
+                        r'C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe',
+                        os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
                     ]
-                )
+                    brave_exe = None
+                    for path in brave_exe_paths:
+                        if os.path.exists(path):
+                            brave_exe = path
+                            break
 
-                context = browser.new_context()
-                page = context.new_page()
+                    # 检查 Brave 是否安装
+                    if not brave_exe:
+                        logger.warning(f"未找到 Brave 浏览器，尝试过的路径: {brave_exe_paths}，回退到 Chromium")
+                        browser_type = 'chromium'
 
-                # 应用 stealth 模式
-                stealth_config = Stealth()
-                stealth_config.apply_stealth_sync(page)
+                        # 构建 args
+                        launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                        if proxy_url:
+                            launch_args.append(f'--proxy-server={proxy_url}')
 
-                # 添加 cookies
-                if self.cookies:
-                    context.add_cookies(self.cookies)
+                        browser = p.chromium.launch(
+                            headless=True,
+                            proxy=proxy_config if proxy_url else None,
+                            args=launch_args
+                        )
+                        context = browser.new_context()
+                        page = context.new_page()
+
+                        # 应用 stealth 模式
+                        stealth_config = Stealth()
+                        stealth_config.apply_stealth_sync(page)
+
+                        # 添加 cookies
+                        if self.cookies:
+                            context.add_cookies(self.cookies)
+                    else:
+                        # 使用 Brave 浏览器（不使用持久化上下文，改用普通 launch）
+                        logger.info(f"使用 Brave 浏览器: {brave_exe}")
+
+                        # 构建 args
+                        launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                        if proxy_url:
+                            launch_args.append(f'--proxy-server={proxy_url}')
+
+                        browser = p.chromium.launch(
+                            headless=True,
+                            executable_path=brave_exe,
+                            proxy=proxy_config if proxy_url else None,
+                            args=launch_args
+                        )
+                        context = browser.new_context()
+                        page = context.new_page()
+
+                        # 应用 stealth 模式
+                        stealth_config = Stealth()
+                        stealth_config.apply_stealth_sync(page)
+
+                        # 添加 cookies
+                        if self.cookies:
+                            context.add_cookies(self.cookies)
+                else:
+                    # 默认使用 Chromium
+                    # 构建 args
+                    launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                    if proxy_url:
+                        launch_args.append(f'--proxy-server={proxy_url}')
+
+                    browser = p.chromium.launch(
+                        headless=True,
+                        proxy=proxy_config if proxy_url else None,
+                        args=launch_args
+                    )
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                    # 应用 stealth 模式
+                    stealth_config = Stealth()
+                    stealth_config.apply_stealth_sync(page)
+
+                    # 添加 cookies
+                    if self.cookies:
+                        context.add_cookies(self.cookies)
 
                 # 访问图表
                 logger.info("正在加载图表...")
                 page.goto(chart_url, timeout=120000, wait_until='load')
 
+                # 检查是否需要登录
+                logger.info("检查登录状态...")
+                page.wait_for_timeout(3000)  # 等待页面加载
+
+                try:
+                    # 检查页面是否有登录按钮
+                    login_button = page.query_selector('button[data-name="header-user-auth-start"]')
+                    if login_button:
+                        logger.info("未登录，开始自动登录...")
+
+                        # 从配置文件读取账号密码
+                        config = self._load_tradingview_config()
+                        if config and config.get('username') and config.get('password'):
+                            username = config['username']
+                            password = config['password']
+
+                            # 点击登录按钮
+                            login_button.click()
+                            page.wait_for_timeout(2000)
+
+                            # 输入用户名
+                            username_input = page.query_selector('input[name="username"]')
+                            if username_input:
+                                username_input.fill(username)
+                                logger.info(f"输入用户名: {username}")
+
+                            page.wait_for_timeout(1000)
+
+                            # 输入密码
+                            password_input = page.query_selector('input[name="password"]')
+                            if password_input:
+                                password_input.fill(password)
+                                logger.info("输入密码")
+
+                            page.wait_for_timeout(1000)
+
+                            # 点击登录按钮
+                            submit_button = page.query_selector('button[type="submit"]')
+                            if submit_button:
+                                submit_button.click()
+                                logger.info("提交登录...")
+
+                            # 等待登录完成
+                            page.wait_for_timeout(5000)
+                            logger.info("✅ 登录完成")
+                        else:
+                            logger.warning("未配置 TradingView 账号密码，跳过自动登录")
+                    else:
+                        logger.info("✅ 已登录")
+                except Exception as e:
+                    logger.warning(f"自动登录失败: {e}")
+
                 # 等待图表渲染
                 logger.info("等待图表渲染...")
                 page.wait_for_timeout(50000)
 
-                # 截图 - 截取页面右侧居中区域
-                logger.info(f"截取图表右侧区域到: {output_path}")
+                # 截图 - 截取页面右下角 HAMA 信息面板（精确定位）
+                logger.info(f"截取图表右下角 HAMA 面板到: {output_path}")
 
                 # 获取页面尺寸
                 viewport_size = page.viewport_size
                 page_width = viewport_size['width']
                 page_height = viewport_size['height']
 
-                # 计算截图区域: 右侧 60% 的宽度,垂直居中
-                # TradingView 右侧面板通常显示详细的指标数据
+                # 计算截图区域: 精确定位到右下角 HAMA 指标面板
+                # HAMA 信息面板是表格形式，通常在右下角，约占页面 25% 宽度，35% 高度
                 clip = {
-                    'x': int(page_width * 0.4),  # 从页面 40% 处开始(右侧60%)
-                    'y': 0,                     # 从顶部开始
-                    'width': int(page_width * 0.6),  # 截取右侧60%宽度
-                    'height': page_height       # 全屏高度
+                    'x': int(page_width * 0.72),   # 从页面 72% 处开始（右侧28%）
+                    'y': int(page_height * 0.60),  # 从页面 60% 处开始（底部40%）
+                    'width': int(page_width * 0.28),   # 截取右侧28%宽度
+                    'height': int(page_height * 0.40)  # 截取底部40%高度
                 }
 
                 logger.info(f"页面尺寸: {page_width}x{page_height}, 截图区域: x={clip['x']}, y={clip['y']}, width={clip['width']}, height={clip['height']}")
                 page.screenshot(path=output_path, clip=clip)
 
+                # 关闭浏览器
                 browser.close()
+
                 logger.info("✅ 图表截图完成")
 
                 return output_path
@@ -213,7 +470,9 @@ class HAMAOCRExtractor:
 
         try:
             # 根据不同引擎调用 OCR
-            if self.ocr_engine == 'paddleocr':
+            if self.ocr_engine == 'rapidocr':
+                text_lines = self._ocr_with_rapidocr(image_path)
+            elif self.ocr_engine == 'paddleocr':
                 text_lines = self._ocr_with_paddleocr(image_path)
             elif self.ocr_engine == 'tesseract':
                 text_lines = self._ocr_with_tesseract(image_path)
@@ -226,12 +485,32 @@ class HAMAOCRExtractor:
             # 解析 OCR 结果
             hama_data = self._parse_ocr_result(text_lines)
 
+            # 添加原始 OCR 文本到结果中
+            hama_data['ocr_text'] = '\n'.join(text_lines)
+
             logger.info(f"✅ OCR 识别成功: {hama_data}")
             return hama_data
 
         except Exception as e:
             logger.error(f"OCR 识别失败: {e}")
             return None
+
+    def _ocr_with_rapidocr(self, image_path: str) -> List[str]:
+        """使用 RapidOCR 识别图片"""
+        result = self.ocr(image_path)
+
+        # RapidOCR 返回格式: (boxes, scores)
+        # boxes 格式: [[[[x1,y1], [x2,y2], [x3,y3], [x4,y4]], text, confidence], ...]
+        text_lines = []
+        if result and len(result) >= 2 and result[0]:
+            for item in result[0]:
+                if len(item) >= 3:
+                    text = item[1]
+                    confidence = item[2]
+                    if confidence > 0.5:  # 置信度阈值
+                        text_lines.append(text)
+
+        return text_lines
 
     def _ocr_with_paddleocr(self, image_path: str) -> List[str]:
         """使用 PaddleOCR 识别图片"""
@@ -274,51 +553,24 @@ class HAMAOCRExtractor:
         return text_lines
 
     def _parse_ocr_result(self, text_lines: List[str]) -> Dict[str, Any]:
-        """解析 OCR 结果，提取 HAMA 数据"""
+        """解析 OCR 结果，从右下角 HAMA 面板提取数据"""
         hama_value = None
         hama_color = 'gray'
         trend = 'neutral'
         current_price = None
-        bollinger_bands = {'upper': None, 'middle': None, 'lower': None}
+        bollinger_status = 'normal'
+        last_cross_info = None
 
-        # 合并所有文本
+        # 合并所有文本，保持行结构
         full_text = ' '.join(text_lines)
+        line_text = '\n'.join(text_lines)
 
-        # 1. 查找 HAMA 数值（格式：3,418.03 或 3418.03）
-        hama_patterns = [
-            r'HAMA.*?([\d,]+\.?\d*)',
-            r'([1-9][\d,]+\.?\d*)',  # 大数值
-        ]
+        logger.debug(f"OCR 识别文本:\n{line_text}")
 
-        for pattern in hama_patterns:
-            matches = re.findall(pattern, full_text)
-            if matches:
-                # 转换为浮点数
-                for match in matches:
-                    try:
-                        value = float(match.replace(',', ''))
-                        # 合理的价格范围（100 - 100000）
-                        if 100 < value < 100000:
-                            hama_value = value
-                            break
-                    except:
-                        continue
-                if hama_value:
-                    break
-
-        # 2. 查找颜色信息
-        if 'green' in full_text.lower() or '上涨' in full_text or '▲' in full_text or 'up' in full_text.lower():
-            hama_color = 'green'
-            trend = 'up'
-        elif 'red' in full_text.lower() or '下跌' in full_text or '▼' in full_text or 'down' in full_text.lower():
-            hama_color = 'red'
-            trend = 'down'
-
-        # 3. 查找当前价格（通常在图表顶部）
+        # 1. 查找价格（"价格" 标签后的数值）
         price_patterns = [
-            r'(\d+[,.]\d+)\s*▲',
-            r'(\d+[,.]\d+)\s*▼',
-            r'(?:ETH|BTC|USDT).*?(\d+[,.]\d+)',
+            r'价格\s*[:：]?\s*([\d,]+\.?\d*)',
+            r'Price\s*[:：]?\s*([\d,]+\.?\d*)',
         ]
 
         for pattern in price_patterns:
@@ -326,52 +578,141 @@ class HAMAOCRExtractor:
             if matches:
                 try:
                     current_price = float(matches[0].replace(',', ''))
+                    logger.debug(f"识别价格: {current_price}")
                     break
                 except:
                     continue
 
-        # 4. 查找布林带数值
-        bb_patterns = [
-            r'上轨[：:]\s*([\d,]+\.?\d*)',
-            r'Upper[：:]\s*([\d,]+\.?\d*)',
-            r'下轨[：:]\s*([\d,]+\.?\d*)',
-            r'Lower[：:]\s*([\d,]+\.?\d*)',
-            r'中轨[：:]\s*([\d,]+\.?\d*)',
-            r'Basis[：:]\s*([\d,]+\.?\d*)',
-        ]
-
-        for pattern in bb_patterns:
-            matches = re.findall(pattern, full_text)
-            if matches:
+        # 如果没有找到价格标签，尝试查找第一个合理数值
+        # 优先匹配带小数点的价格（如 0.3939），然后匹配大数值（如 95000）
+        if not current_price:
+            # 先查找小数价格（0.001 - 100）
+            for match in re.finditer(r'(0\.\d+|[1-9]\d*\.\d+)', full_text):
                 try:
-                    value = float(matches[0].replace(',', ''))
-                    if '上轨' in pattern or 'Upper' in pattern:
-                        bollinger_bands['upper'] = value
-                    elif '下轨' in pattern or 'Lower' in pattern:
-                        bollinger_bands['lower'] = value
-                    elif '中轨' in pattern or 'Basis' in pattern:
-                        bollinger_bands['middle'] = value
+                    value = float(match.group(1).replace(',', ''))
+                    # 小数价格范围（0.001 - 100）
+                    if 0.001 <= value <= 100:
+                        current_price = value
+                        logger.debug(f"识别小数价格: {current_price}")
+                        break
                 except:
                     continue
 
-        return {
-            'hama_value': hama_value,
+            # 如果没找到小数，再查找大数值（100 - 100000）
+            if not current_price:
+                for match in re.finditer(r'([1-9][\d,]+\.?\d*)', full_text):
+                    try:
+                        value = float(match.group(1).replace(',', ''))
+                        # 合理的大数值价格范围（100 - 100000）
+                        if 100 < value < 100000:
+                            current_price = value
+                            logger.debug(f"识别大数值价格: {current_price}")
+                            break
+                    except:
+                        continue
+
+        # 2. 查找 HAMA 状态（"HAMA状态" 标签后的文本）
+        hama_status_patterns = [
+            r'HAMA状态\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
+            r'HAMA\s*Status\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
+        ]
+
+        for pattern in hama_status_patterns:
+            matches = re.findall(pattern, full_text)
+            if matches:
+                status_text = matches[0].strip()
+                logger.debug(f"识别 HAMA 状态: {status_text}")
+
+                if '上涨' in status_text or 'bull' in status_text.lower():
+                    hama_color = 'green'
+                    trend = 'up'
+                elif '下跌' in status_text or 'bear' in status_text.lower():
+                    hama_color = 'red'
+                    trend = 'down'
+                elif '盘整' in status_text or 'neutral' in status_text.lower():
+                    hama_color = 'gray'
+                    trend = 'neutral'
+                break
+
+        # 3. 查找布林带状态（"状态" 标签后的文本）
+        bb_status_patterns = [
+            r'状态\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
+            r'Status\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
+        ]
+
+        for pattern in bb_status_patterns:
+            matches = re.findall(pattern, full_text)
+            if matches:
+                status_text = matches[0].strip()
+                if '收缩' in status_text or 'squeeze' in status_text.lower():
+                    bollinger_status = 'squeeze'
+                elif '扩张' in status_text or 'expansion' in status_text.lower():
+                    bollinger_status = 'expansion'
+                logger.debug(f"识别布林带状态: {bollinger_status}")
+                break
+
+        # 4. 查找最近交叉信息（"最近交叉" 标签后的文本）
+        cross_patterns = [
+            r'最近交叉\s*[:：]?\s*([^\n]+)',
+            r'Last\s*Cross\s*[:：]?\s*([^\n]+)',
+        ]
+
+        for pattern in cross_patterns:
+            matches = re.findall(pattern, line_text)  # 使用行文本保留换行
+            if matches:
+                last_cross_info = matches[0].strip()
+                logger.debug(f"识别最近交叉: {last_cross_info}")
+
+                # 从交叉信息中提取信号（涨/跌）
+                if '涨' in last_cross_info or 'up' in last_cross_info.lower():
+                    if not hama_color or hama_color == 'gray':  # 如果 HAMA 状态未识别，从交叉信息推断
+                        hama_color = 'green'
+                        trend = 'up'
+                elif '跌' in last_cross_info or 'down' in last_cross_info.lower():
+                    if not hama_color or hama_color == 'gray':
+                        hama_color = 'red'
+                        trend = 'down'
+                break
+
+        # 5. 如果仍未识别出趋势，尝试从全局文本中查找
+        if trend == 'neutral':
+            if '上涨趋势' in full_text or 'bullish' in full_text.lower():
+                hama_color = 'green'
+                trend = 'up'
+            elif '下跌趋势' in full_text or 'bearish' in full_text.lower():
+                hama_color = 'red'
+                trend = 'down'
+            elif '绿色' in full_text or 'green' in full_text.lower():
+                hama_color = 'green'
+                trend = 'up'
+            elif '红色' in full_text or 'red' in full_text.lower():
+                hama_color = 'red'
+                trend = 'down'
+
+        # 构建返回结果
+        result = {
+            'hama_value': current_price,  # 右下角面板显示价格作为主要值
             'hama_color': hama_color,
             'trend': trend,
             'current_price': current_price,
-            'bollinger_bands': bollinger_bands,
+            'bollinger_status': bollinger_status,
+            'last_cross_info': last_cross_info,
+            'hama_status': f"{trend}_trend",  # 兼容旧格式
             'ocr_engine': self.ocr_engine,
-            'confidence': 'medium',  # OCR 的置信度通常中等
-            'source': 'ocr',
+            'confidence': 'high',  # 右下角面板结构化文本，置信度高
+            'source': 'ocr_panel',
             'raw_text': full_text[:500]  # 保存部分原始文本用于调试
         }
+
+        logger.info(f"✅ 解析完成: color={hama_color}, trend={trend}, price={current_price}")
+        return result
 
 
 def extract_hama_with_ocr(
     chart_url: str = None,
     symbol: str = 'BTCUSDT',
     interval: str = '15',
-    ocr_engine: str = 'paddleocr'
+    ocr_engine: str = 'rapidocr'
 ) -> Optional[Dict[str, Any]]:
     """
     使用 OCR 提取 HAMA 指标（便捷函数）
@@ -380,7 +721,7 @@ def extract_hama_with_ocr(
         chart_url: 图表 URL
         symbol: 币种符号
         interval: 时间周期
-        ocr_engine: OCR 引擎 ('paddleocr', 'tesseract', 'easyocr')
+        ocr_engine: OCR 引擎 ('rapidocr', 'paddleocr', 'tesseract', 'easyocr')
 
     Returns:
         HAMA 指标数据
@@ -418,7 +759,7 @@ def extract_hama_with_ocr(
 if __name__ == '__main__':
     # 测试代码
     print("="*60)
-    print("HAMA OCR 识别测试")
+    print("HAMA OCR 识别测试 (RapidOCR)")
     print("="*60)
 
     # 测试 OCR 识别
@@ -426,7 +767,7 @@ if __name__ == '__main__':
         chart_url='https://cn.tradingview.com/chart/U1FY2qxO/',
         symbol='ETHUSD',
         interval='15',
-        ocr_engine='paddleocr'
+        ocr_engine='rapidocr'
     )
 
     if result:
@@ -453,5 +794,8 @@ if __name__ == '__main__':
         print("="*60)
     else:
         print("❌ 识别失败")
-        print("\n请确保已安装 PaddleOCR:")
-        print("pip install paddleocr paddlepaddle")
+        print("\n请确保已安装 RapidOCR:")
+        print("pip install rapidocr_onnxruntime")
+        print("\n或使用其他 OCR 引擎:")
+        print("pip install paddleocr paddlepaddle  # PaddleOCR")
+        print("pip install easyocr  # EasyOCR")

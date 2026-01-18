@@ -2303,9 +2303,20 @@ registerOverlay({
       })
     }
 
+    // --- 判断指标是否应该使用特殊的 zLevel（HAMA 显示在顶层）---
+    const shouldUseLowZLevel = (indicatorName) => {
+      // HAMA 相关指标识别
+      const name = indicatorName.toLowerCase()
+      return name.includes('hama') || name.includes('hma')
+    }
+
     // --- 注册自定义指标辅助函数 ---
-    const registerCustomIndicator = (name, calcFunc, figures, calcParams = [], precision = 2, shouldOverlay = false) => {
+    const registerCustomIndicator = (name, calcFunc, figures, calcParams = [], precision = 2, shouldOverlay = false, zIndex = null) => {
       try {
+        // 如果没有明确指定 zIndex，自动判断
+        // HAMA 指标使用高 zLevel (100) 显示在顶层，其他指标使用默认 zLevel (0)
+        const finalZIndex = zIndex !== null ? zIndex : (shouldUseLowZLevel(name) ? 100 : 0)
+
         // KLineChart v9 使用 series: 'price' 来标识主图指标
         const indicatorConfig = {
           name,
@@ -2314,11 +2325,12 @@ registerOverlay({
           figures,
           calcParams,
           precision,
-          series: shouldOverlay ? 'price' : 'normal'
+          series: shouldOverlay ? 'price' : 'normal',
+          zLevel: finalZIndex // 使用计算出的 zIndex 参数控制层级
         }
 
         registerIndicator(indicatorConfig)
-        // console.log(`成功注册指标: ${name}, series: ${indicatorConfig.series}`)
+        // console.log(`成功注册指标: ${name}, zLevel: ${finalZIndex}`)
         return true
       } catch (err) {
         // 如果已注册，忽略错误
@@ -2388,10 +2400,25 @@ registerOverlay({
       // 转换数据格式（KLineChart 需要内部格式用于计算）
       const internalData = convertToInternalFormat(klineData.value)
 
+      // 重新排序指标：HAMA 指标排在最后（显示在顶层）
+      const sortedIndicators = [...props.activeIndicators].sort((a, b) => {
+        const aIsHAMA = shouldUseLowZLevel(a.name || a.id || '')
+        const bIsHAMA = shouldUseLowZLevel(b.name || b.id || '')
+        // HAMA 指标排在后面
+        if (aIsHAMA && !bIsHAMA) return 1
+        if (!aIsHAMA && bIsHAMA) return -1
+        return 0
+      })
+
+      console.log('[HAMA Debug] 指标排序:', props.activeIndicators.map(i => i.name || i.id), '->', sortedIndicators.map(i => i.name || i.id))
+
       // 遍历所有激活的指标
-      for (let idx = 0; idx < props.activeIndicators.length; idx++) {
-        const indicator = props.activeIndicators[idx]
+      for (let idx = 0; idx < sortedIndicators.length; idx++) {
+        const indicator = sortedIndicators[idx]
         try {
+          // 添加调试信息
+          console.log('[HAMA Debug] 处理指标:', indicator.name || indicator.id, 'type:', indicator.type, 'has calculate:', !!indicator.calculate)
+
           // 处理 Python 指标
           if (indicator.type === 'python') {
             if (!indicator.code) continue
@@ -2525,6 +2552,10 @@ registerOverlay({
                     const figures = []
                     const plotDataMap = {}
 
+                    // 判断是否为 HAMA 指标，用于设置 zIndex
+                    const indicatorFullName = indicator.name || indicator.id || ''
+                    const isHAMAIndicator = shouldUseLowZLevel(indicatorFullName)
+
                     for (let plotIdx = 0; plotIdx < validPlots.length; plotIdx++) {
                       const plot = validPlots[plotIdx]
                       const plotName = plot.name || `PLOT_${plotIdx}_${idx}`
@@ -2538,14 +2569,18 @@ registerOverlay({
                         key: figureKey,
                         title: plot.name || plotName,
                         type: figureType,
-                        color: plotColor
+                        color: plotColor,
+                        // HAMA 指标使用高 zIndex 确保显示在顶层
+                        ...(isHAMAIndicator ? { zIndex: 100 } : {})
                       })
 
                       plotDataMap[figureKey] = plot.data
                     }
 
                     // 确定是否叠加在主图上（如果所有 plots 都是 overlay，则叠加）
-                    const allOverlay = validPlots.every(plot => plot.overlay !== false)
+                    // 特殊处理：HAMA 指标强制叠加在主图顶层
+                    const allOverlay = isHAMAIndicator || validPlots.every(plot => plot.overlay !== false)
+                    console.log('[HAMA Debug] 指标名称:', indicatorFullName, '是否为HAMA:', isHAMAIndicator, 'allOverlay:', allOverlay, 'validPlots:', validPlots.map(p => ({ key: p.key, overlay: p.overlay })))
                     // const customIndicatorName = `${indicator.id}_combined`
                     let customIndicatorName = `${indicator.id}_combined`
                     if (result && result.name) {
@@ -2575,7 +2610,8 @@ registerOverlay({
 
                       if (registered) {
                         if (allOverlay) {
-                          // 主图指标
+                          console.log('[HAMA Debug] 创建主图指标:', customIndicatorName)
+                          // 主图指标 - 使用 z: -1 确保显示在底层（右下角）
                           const paneId = chartRef.value.createIndicator(
                             customIndicatorName,
                             false,
@@ -2587,6 +2623,7 @@ registerOverlay({
                             addedIndicatorIds.value.push({ paneId: 'candle_pane', name: customIndicatorName })
                           }
                         } else {
+                          console.log('[HAMA Debug] 创建副图指标:', customIndicatorName)
                           // 副图指标
                           const indicatorId = chartRef.value.createIndicator(
                             customIndicatorName,
@@ -2739,6 +2776,10 @@ registerOverlay({
                     const figures = []
                     const plotDataMap = {}
 
+                    // 判断是否为 HAMA 指标，用于设置 zIndex
+                    const indicatorFullName = indicator.name || indicator.id || ''
+                    const isHAMAIndicator = shouldUseLowZLevel(indicatorFullName)
+
                     for (let plotIdx = 0; plotIdx < validPlots.length; plotIdx++) {
                       const plot = validPlots[plotIdx]
                       const plotName = plot.name || `PLOT_${plotIdx}`
@@ -2752,14 +2793,18 @@ registerOverlay({
                         key: figureKey,
                         title: plot.name || plotName,
                         type: figureType,
-                        color: plotColor
+                        color: plotColor,
+                        // HAMA 指标使用高 zIndex 确保显示在顶层
+                        ...(isHAMAIndicator ? { zIndex: 100 } : {})
                       })
 
                       plotDataMap[figureKey] = plot.data
                     }
 
                     // 确定是否叠加在主图上（如果所有 plots 都是 overlay，则叠加）
-                    const allOverlay = validPlots.every(plot => plot.overlay !== false)
+                    // 特殊处理：HAMA 指标强制叠加在主图顶层
+                    const allOverlay = isHAMAIndicator || validPlots.every(plot => plot.overlay !== false)
+                    console.log('[HAMA Debug Python] 指标名称:', indicatorFullName, '是否为HAMA:', isHAMAIndicator, 'allOverlay:', allOverlay, 'validPlots:', validPlots.map(p => ({ key: p.key, overlay: p.overlay })))
                     // const customIndicatorName = `${indicator.id}_combined`
                     let customIndicatorName = `${indicator.id}_combined`
                     if (pythonResult && pythonResult.name) {
@@ -2790,7 +2835,8 @@ registerOverlay({
 
                       if (registered) {
                         if (allOverlay) {
-                          // 主图指标
+                          console.log('[HAMA Debug] 创建主图指标:', customIndicatorName)
+                          // 主图指标 - 使用 z: -1 确保显示在底层（右下角）
                           const paneId = chartRef.value.createIndicator(
                             customIndicatorName,
                             false,
@@ -2802,6 +2848,7 @@ registerOverlay({
                             addedIndicatorIds.value.push({ paneId: 'candle_pane', name: customIndicatorName })
                           }
                         } else {
+                          console.log('[HAMA Debug] 创建副图指标:', customIndicatorName)
                           // 副图指标
                           const indicatorId = chartRef.value.createIndicator(
                             customIndicatorName,
@@ -2860,7 +2907,7 @@ registerOverlay({
               )
 
               if (registered) {
-                // 创建指标
+                // 创建指标 - 使用 z: -1 确保显示在底层（右下角）
                 const paneId = chartRef.value.createIndicator(
                   customIndicatorName,
                   false, // isStack
@@ -2923,7 +2970,7 @@ registerOverlay({
               )
 
               if (registered) {
-                // 创建指标（主图指标）
+                // 创建指标（主图指标） - 使用 z: -1 确保显示在底层（右下角）
                 const paneId = chartRef.value.createIndicator(
                   customIndicatorName,
                   false, // isStack: false 表示不堆叠

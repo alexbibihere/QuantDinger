@@ -1,0 +1,15 @@
+
+    viewScreenshot(screenshotPath) {
+      """查看 OCR 识别的截图"""
+      if (!screenshotPath) {
+        this.$message.warning('截图路径为空')
+        return
+      }
+
+      // 构建完整的截图 URL
+      const screenshotName = screenshotPath.split('\').pop()  # 获取文件名
+      const screenshotUrl = `/screenshot/${screenshotName}`
+
+      // 使用新窗口打开截图
+      window.open(screenshotUrl, '_blank')
+    }

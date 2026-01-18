@@ -30,12 +30,12 @@ f_c_gradientAdvDecPro(_source, _center, _steps, _c_bearWeak, _c_bearStrong, _c_b
     bool  _dn      = _chg < 0
     bool  _srcBull = _source > _center
     bool  _srcBear = _source < _center
-    _qtyAdvDec := 
+    _qtyAdvDec :=
       _srcBull ? _xUp ? 1 : _up ? math.min(_maxSteps, _qtyAdvDec + 1) : _dn ? math.max(1, _qtyAdvDec - 1) : _qtyAdvDec :
       _srcBear ? _xDn ? 1 : _dn ? math.min(_maxSteps, _qtyAdvDec + 1) : _up ? math.max(1, _qtyAdvDec - 1) : _qtyAdvDec : _qtyAdvDec
     var color _return = na
-    _return := 
-      _srcBull ? color.from_gradient(_qtyAdvDec, 1, _maxSteps, _c_bullWeak, _c_bullStrong) : 
+    _return :=
+      _srcBull ? color.from_gradient(_qtyAdvDec, 1, _maxSteps, _c_bullWeak, _c_bullStrong) :
       _srcBear ? color.from_gradient(_qtyAdvDec, 1, _maxSteps, _c_bearWeak, _c_bearStrong) : _return
 
 // MA计算函数
@@ -116,10 +116,10 @@ CandleClose = funcCalcClose(CloseType, SourceClose, CloseLength)
 
 // 绘制HAMA蜡烛图
 BodyColor = CandleOpen > CandleOpen[1] ? color.green : color.red
-plotcandle(CandleOpen, CandleHigh, CandleLow, CandleClose, 
-           color=UseGradient ? col : BodyColor, 
-           title="HAMA Candles", 
-           wickcolor=WickColor, 
+plotcandle(CandleOpen, CandleHigh, CandleLow, CandleClose,
+           color=UseGradient ? col : BodyColor,
+           title="HAMA Candles",
+           wickcolor=WickColor,
            bordercolor=na)
 
 // ===== 新增：HAMA蜡烛图与MA线交叉信号 =====
@@ -130,7 +130,7 @@ hama_cross_down = ta.crossunder(CandleClose, ma)  // HAMA蜡烛图下穿MA线
 // 移除调试信息，修复plotshape参数错误
 
 // 标签创建已移至下方的交叉处理逻辑中
-// plotshape(hama_cross_down, title="跌信号", text="跌", style=shape.labelup, 
+// plotshape(hama_cross_down, title="跌信号", text="跌", style=shape.labelup,
 //           location=location.belowbar, color=color.red)
 // 绘制HAMA MA线 - 使用条件显示而不是条件plot
 ma_color = UseGradient ? col : BodyColor
@@ -166,22 +166,22 @@ if hama_cross_up or hama_cross_down
     // 记录最新的交叉时间
     last_cross_time := time
     last_cross_bar := bar_index
-    
+
     if hama_cross_up
         last_cross_direction := 1
         last_cross_signal := "涨"
-        label.new(bar_index, ma, "涨", 
-                  color=color.green, 
-                  textcolor=color.white, 
-                  style=label.style_label_down, 
+        label.new(bar_index, ma, "涨",
+                  color=color.green,
+                  textcolor=color.white,
+                  style=label.style_label_down,
                   yloc=yloc.price)
     else
         last_cross_direction := -1
         last_cross_signal := "跌"
-        label.new(bar_index, ma, "跌", 
-                  color=color.red, 
-                  textcolor=color.white, 
-                  style=label.style_label_up, 
+        label.new(bar_index, ma, "跌",
+                  color=color.red,
+                  textcolor=color.white,
+                  style=label.style_label_up,
                   yloc=yloc.price)
 
 // 判断当前是否维持趋势
@@ -195,35 +195,37 @@ min_deviation = 0.1  // 最小偏离0.1%
 maintain_bullish := maintain_bullish and deviation_pct >= min_deviation
 maintain_bearish := maintain_bearish and deviation_pct >= min_deviation
 
-// ===== 信息显示 - 添加HAMA交叉信息 =====
-var table info_table = table.new(position.middle_right, 2, 9, bgcolor=color.white, border_width=1)
+// ===== 信息显示 - 添加价格字段 =====
+var table info_table = table.new(position.bottom_right, 2, 10, bgcolor=color.white, border_width=1)
 if barstate.islast
-    table.cell(info_table, 0, 0, "布林带宽度", text_color=color.black)
-    table.cell(info_table, 1, 0, str.tostring(bb_width, "#.#####"), text_color=color.black)
-    table.cell(info_table, 0, 1, "价格位置", text_color=color.black)
-    table.cell(info_table, 1, 1, str.tostring(price_position, "#.##%"), text_color=color.black)
-    table.cell(info_table, 0, 2, "上轨", text_color=color.black)
-    table.cell(info_table, 1, 2, str.tostring(upper, "#.##"), text_color=color.black)
-    table.cell(info_table, 0, 3, "中轨", text_color=color.black)
-    table.cell(info_table, 1, 3, str.tostring(basis, "#.##"), text_color=color.black)
-    table.cell(info_table, 0, 4, "下轨", text_color=color.black)
-    table.cell(info_table, 1, 4, str.tostring(lower, "#.##"), text_color=color.black)
+    table.cell(info_table, 0, 0, "价格", text_color=color.black)
+    table.cell(info_table, 1, 0, str.tostring(close, "#.##"), text_color=color.black)
+    // table.cell(info_table, 0, 1, "价格位置", text_color=color.black)
+    // table.cell(info_table, 1, 1, str.tostring(price_position, "#.##%"), text_color=color.black)
+    // table.cell(info_table, 0, 2, "布林带宽度", text_color=color.black)
+    // table.cell(info_table, 1, 2, str.tostring(bb_width, "#.#####"), text_color=color.black)
+    // table.cell(info_table, 0, 3, "上轨", text_color=color.black)
+    // table.cell(info_table, 1, 3, str.tostring(upper, "#.##"), text_color=color.black)
+    // table.cell(info_table, 0, 4, "中轨", text_color=color.black)
+    // table.cell(info_table, 1, 4, str.tostring(basis, "#.##"), text_color=color.black)
+    // table.cell(info_table, 0, 5, "下轨", text_color=color.black)
+    // table.cell(info_table, 1, 5, str.tostring(lower, "#.##"), text_color=color.black)
     // 新增HAMA相关信息
-    table.cell(info_table, 0, 5, "HAMA状态", text_color=color.black)
+    table.cell(info_table, 0, 6, "HAMA状态", text_color=color.black)
     hama_status = maintain_bullish ? "上涨趋势" : maintain_bearish ? "下跌趋势" : "盘整"
     hama_status_color = maintain_bullish ? color.green : maintain_bearish ? color.red : color.gray
-    table.cell(info_table, 1, 5, hama_status, text_color=hama_status_color)
-    table.cell(info_table, 0, 6, "蜡烛/MA", text_color=color.black)
+    table.cell(info_table, 1, 6, hama_status, text_color=hama_status_color)
+    table.cell(info_table, 0, 7, "蜡烛/MA", text_color=color.black)
     candle_ma_relation = CandleClose > ma ? "蜡烛在MA上" : CandleClose < ma ? "蜡烛在MA下" : "重合"
-    table.cell(info_table, 1, 6, candle_ma_relation, text_color=color.black)
-    table.cell(info_table, 0, 7, "状态", text_color=color.black)
+    table.cell(info_table, 1, 7, candle_ma_relation, text_color=color.black)
+    table.cell(info_table, 0, 8, "状态", text_color=color.black)
     status_text = bb_squeeze ? "收缩" : bb_expansion ? "扩张" : "正常"
     status_color = bb_squeeze ? color.orange : bb_expansion ? color.green : color.gray
-    table.cell(info_table, 1, 7, status_text, text_color=status_color)
+    table.cell(info_table, 1, 8, status_text, text_color=status_color)
     // 新增最近交叉信息
-    table.cell(info_table, 0, 8, "最近交叉", text_color=color.black)
+    table.cell(info_table, 0, 9, "最近交叉", text_color=color.black)
     if na(last_cross_time)
-        table.cell(info_table, 1, 8, "无", text_color=color.gray)
+        table.cell(info_table, 1, 9, "无", text_color=color.gray)
     else
         // 手动计算并格式化时间组件，确保正确显示
         y = year(last_cross_time)
@@ -231,15 +233,15 @@ if barstate.islast
         d = dayofmonth(last_cross_time)
         h = hour(last_cross_time)
         min = minute(last_cross_time)
-        
+
         // 确保月份、日期、小时、分钟为两位数
         m_str = m < 10 ? "0" + str.tostring(m) : str.tostring(m)
         d_str = d < 10 ? "0" + str.tostring(d) : str.tostring(d)
         h_str = h < 10 ? "0" + str.tostring(h) : str.tostring(h)
         min_str = min < 10 ? "0" + str.tostring(min) : str.tostring(min)
-        
+
         // 构建格式化字符串
         time_str = str.tostring(y) + "-" + m_str + "-" + d_str + " " + h_str + ":" + min_str
         cross_info = last_cross_signal + "(" + time_str + ")"
         cross_color = last_cross_signal == "涨" ? color.green : color.red
-        table.cell(info_table, 1, 8, cross_info, text_color=cross_color)
+        table.cell(info_table, 1, 9, cross_info, text_color=cross_color)

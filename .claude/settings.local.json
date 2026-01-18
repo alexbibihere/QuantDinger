@@ -66,7 +66,27 @@
       "Bash(do echo:*)",
       "Bash(break:*)",
       "Bash(done:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(Select-String -Pattern \"\\(Successfully|DONE|ERROR|Err|failed|Creating|Starting|Started\\)\")",
+      "Bash(Select-Object:*)",
+      "Bash(Start-Sleep -Seconds 30)",
+      "Bash(Select-String:*)",
+      "Bash(npm run serve:*)",
+      "Bash(dir:*)",
+      "Bash(node:*)",
+      "Bash(node -c:*)",
+      "Bash(npx eslint:*)",
+      "Bash(start python:*)",
+      "Bash(redis-cli ping:*)",
+      "Bash(where:*)",
+      "Bash(playwright install:*)",
+      "Bash(sqlite3:*)",
+      "Bash(pkill:*)",
+      "Bash(start:*)",
+      "Bash(cmd:*)",
+      "Bash(echo:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(cmd.exe:*)"
     ]
   }
 }

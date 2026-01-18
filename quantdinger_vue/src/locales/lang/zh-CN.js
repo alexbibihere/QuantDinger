@@ -1902,7 +1902,25 @@ const locale = {
 'hamaMarket.addFailed': '添加失败',
 'hamaMarket.fetchFailed': '获取数据失败',
 'hamaMarket.total': '共 {total} 条',
-'hamaMarket.hamaInfo': 'HAMA信息'
+'hamaMarket.hamaInfo': 'HAMA信息',
+'menu.tvHamaTest': 'HAMA图表测试',
+'tvHamaTest.title': 'TradingView HAMA图表测试',
+'tvHamaTest.subtitle': '基于klinecharts的TradingView风格HAMA图表,包含布林带和MA线',
+'tvHamaTest.symbol': '币种',
+'tvHamaTest.market': '市场',
+'tvHamaTest.timeframe': '周期',
+'tvHamaTest.theme': '主题',
+'tvHamaTest.realtime': '实时更新',
+'tvHamaTest.refresh': '刷新数据',
+'tvHamaTest.reset': '重置设置',
+'tvHamaTest.currentPrice': '当前价格',
+'tvHamaTest.change': '涨跌幅',
+'tvHamaTest.updateTime': '更新时间',
+'tvHamaTest.description': 'HAMA图表使用说明',
+'tvHamaTest.features': '功能特性',
+'tvHamaTest.shortcuts': '快捷键',
+'tvHamaTest.notes': '注意事项',
+'tvHamaTest.support': '技术支持'
 }
 
 export default {
