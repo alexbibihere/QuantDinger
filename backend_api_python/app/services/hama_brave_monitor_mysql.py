@@ -91,25 +91,94 @@ class HamaBraveMonitor:
     def _init_db(self):
         """初始化数据库表"""
         try:
-            # 创建表
-            self.db_client.execute("""
-                CREATE TABLE IF NOT EXISTS hama_monitor_cache (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    symbol VARCHAR(20) NOT NULL,
-                    hama_trend VARCHAR(10),
-                    hama_color VARCHAR(10),
-                    hama_value DECIMAL(20, 8),
-                    price DECIMAL(20, 8),
-                    ocr_text TEXT,
-                    screenshot_path VARCHAR(255),
-                    monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY unique_symbol (symbol),
-                    INDEX idx_monitored_at (monitored_at)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """)
-            logger.info("数据库表初始化成功")
+            # 检查数据库类型
+            db_type = os.getenv('DB_TYPE', 'sqlite')
+            cursor = self.db_client.cursor()
+
+            # 检查表是否存在
+            if db_type == 'sqlite':
+                cursor.execute("""
+                    SELECT name FROM sqlite_master
+                    WHERE type='table' AND name='hama_monitor_cache'
+                """)
+                table_exists = cursor.fetchone() is not None
+            else:  # MySQL
+                cursor.execute("SHOW TABLES LIKE 'hama_monitor_cache'")
+                table_exists = cursor.fetchone() is not None
+
+            # 创建表（如果不存在）
+            if not table_exists:
+                if db_type == 'sqlite':
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS hama_monitor_cache (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            symbol VARCHAR(20) NOT NULL UNIQUE,
+                            hama_trend VARCHAR(10),
+                            hama_color VARCHAR(10),
+                            hama_value DECIMAL(20, 8),
+                            price DECIMAL(20, 8),
+                            ocr_text TEXT,
+                            screenshot_path VARCHAR(255),
+                            email_sent INTEGER DEFAULT 0,
+                            email_sent_at TIMESTAMP NULL,
+                            monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                else:  # MySQL
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS hama_monitor_cache (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            symbol VARCHAR(20) NOT NULL,
+                            hama_trend VARCHAR(10),
+                            hama_color VARCHAR(10),
+                            hama_value DECIMAL(20, 8),
+                            price DECIMAL(20, 8),
+                            ocr_text TEXT,
+                            screenshot_path VARCHAR(255),
+                            email_sent TINYINT(1) DEFAULT 0,
+                            email_sent_at TIMESTAMP NULL,
+                            monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                            UNIQUE KEY unique_symbol (symbol),
+                            INDEX idx_monitored_at (monitored_at),
+                            INDEX idx_email_sent (email_sent)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """)
+
+                self.db_client.commit()
+                logger.info("数据库表初始化成功")
+            else:
+                # 检查是否有 email_sent 字段
+                if db_type == 'sqlite':
+                    cursor.execute("PRAGMA table_info(hama_monitor_cache)")
+                    columns = cursor.fetchall()
+                    has_email_sent = any('email_sent' in str(col) for col in columns)
+                else:  # MySQL
+                    cursor.execute("SHOW COLUMNS FROM hama_monitor_cache LIKE 'email_sent'")
+                    has_email_sent = cursor.fetchone() is not None
+
+                if not has_email_sent:
+                    # 添加新字段
+                    if db_type == 'sqlite':
+                        cursor.execute("""
+                            ALTER TABLE hama_monitor_cache
+                            ADD COLUMN email_sent INTEGER DEFAULT 0,
+                            ADD COLUMN email_sent_at TIMESTAMP NULL
+                        """)
+                    else:  # MySQL
+                        cursor.execute("""
+                            ALTER TABLE hama_monitor_cache
+                            ADD COLUMN email_sent TINYINT(1) DEFAULT 0,
+                            ADD COLUMN email_sent_at TIMESTAMP NULL,
+                            ADD INDEX idx_email_sent (email_sent)
+                        """)
+
+                    self.db_client.commit()
+                    logger.info("数据库表添加邮件发送字段")
+
         except Exception as e:
             logger.error(f"数据库表初始化失败: {e}")
 
@@ -154,13 +223,14 @@ class HamaBraveMonitor:
             logger.error(f"获取缓存失败 {symbol}: {e}")
             return None
 
-    def set_cached_hama(self, symbol: str, hama_data: Dict[str, Any]) -> bool:
+    def set_cached_hama(self, symbol: str, hama_data: Dict[str, Any], email_sent: bool = False) -> bool:
         """
         设置币种的 HAMA 状态到数据库
 
         Args:
             symbol: 币种符号
             hama_data: HAMA 数据
+            email_sent: 是否已发送邮件
 
         Returns:
             是否成功
@@ -173,14 +243,16 @@ class HamaBraveMonitor:
             # 使用 INSERT ... ON DUPLICATE KEY UPDATE
             self.db_client.execute("""
                 INSERT INTO hama_monitor_cache
-                (symbol, hama_trend, hama_color, hama_value, price, ocr_text, monitored_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (symbol, hama_trend, hama_color, hama_value, price, ocr_text, email_sent, email_sent_at, monitored_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     hama_trend = VALUES(hama_trend),
                     hama_color = VALUES(hama_color),
                     hama_value = VALUES(hama_value),
                     price = VALUES(price),
                     ocr_text = VALUES(ocr_text),
+                    email_sent = VALUES(email_sent),
+                    email_sent_at = VALUES(email_sent_at),
                     monitored_at = VALUES(monitored_at),
                     updated_at = CURRENT_TIMESTAMP
             """, (
@@ -190,14 +262,104 @@ class HamaBraveMonitor:
                 hama_data.get('hama_value'),
                 hama_data.get('price'),
                 hama_data.get('ocr_text', ''),
+                1 if email_sent else 0,
+                datetime.now() if email_sent else None,
                 datetime.now()
             ))
 
             self.db_client.commit()
-            logger.debug(f"{symbol} HAMA 数据已保存到数据库")
+            logger.debug(f"{symbol} HAMA 数据已保存到数据库 (邮件发送: {email_sent})")
             return True
         except Exception as e:
             logger.error(f"保存数据失败 {symbol}: {e}")
+            return False
+
+    def get_email_status(self, symbol: str) -> Dict[str, Any]:
+        """
+        获取币种的邮件发送状态
+
+        Args:
+            symbol: 币种符号
+
+        Returns:
+            邮件状态字典 {'email_sent': bool, 'email_sent_at': datetime}
+        """
+        if not self.db_client:
+            return {'email_sent': False, 'email_sent_at': None}
+
+        try:
+            result = self.db_client.execute(
+                "SELECT email_sent, email_sent_at FROM hama_monitor_cache WHERE symbol = %s",
+                (symbol,)
+            ).fetchone()
+
+            if result:
+                return {
+                    'email_sent': bool(result[0]),
+                    'email_sent_at': result[1]
+                }
+            else:
+                return {'email_sent': False, 'email_sent_at': None}
+        except Exception as e:
+            logger.error(f"获取邮件状态失败 {symbol}: {e}")
+            return {'email_sent': False, 'email_sent_at': None}
+
+    def update_email_status(self, symbol: str) -> bool:
+        """
+        更新币种的邮件发送状态
+
+        Args:
+            symbol: 币种符号
+
+        Returns:
+            是否成功
+        """
+        if not self.db_client:
+            return False
+
+        try:
+            self.db_client.execute("""
+                UPDATE hama_monitor_cache
+                SET email_sent = 1,
+                    email_sent_at = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE symbol = %s
+            """, (datetime.now(), symbol))
+
+            self.db_client.commit()
+            logger.debug(f"{symbol} 邮件状态已更新为已发送")
+            return True
+        except Exception as e:
+            logger.error(f"更新邮件状态失败 {symbol}: {e}")
+            return False
+
+    def reset_email_status(self, symbol: str) -> bool:
+        """
+        重置币种的邮件发送状态（用于状态变为盘整时）
+
+        Args:
+            symbol: 币种符号
+
+        Returns:
+            是否成功
+        """
+        if not self.db_client:
+            return False
+
+        try:
+            self.db_client.execute("""
+                UPDATE hama_monitor_cache
+                SET email_sent = 0,
+                    email_sent_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE symbol = %s
+            """, (symbol,))
+
+            self.db_client.commit()
+            logger.info(f"{symbol} 邮件状态已重置（状态变为盘整）")
+            return True
+        except Exception as e:
+            logger.error(f"重置邮件状态失败 {symbol}: {e}")
             return False
 
     def monitor_symbol(self, symbol: str, browser_type: str = 'chromium') -> Optional[Dict[str, Any]]:
@@ -257,11 +419,11 @@ class HamaBraveMonitor:
                 hama_data['screenshot_path'] = screenshot_filename  # 只保存文件名
                 hama_data['screenshot_absolute_path'] = result_path  # 保存完整路径用于调试
 
-                # 检测趋势变化并发送邮件通知
-                self._check_and_notify_trend(symbol, hama_data, screenshot_filename)
+                # 检测趋势变化并发送邮件通知（返回邮件是否发送成功）
+                email_sent = self._check_and_notify_trend(symbol, hama_data, screenshot_filename)
 
-                # 保存到数据库
-                self.set_cached_hama(symbol, hama_data)
+                # 保存到数据库（包含邮件发送状态）
+                self.set_cached_hama(symbol, hama_data, email_sent=email_sent)
 
                 logger.info(f"{symbol} HAMA 状态: {hama_data.get('color', 'unknown')} ({hama_data.get('trend', 'unknown')})")
                 return hama_data
@@ -275,17 +437,27 @@ class HamaBraveMonitor:
             logger.error(traceback.format_exc())
             return None
 
-    def _check_and_notify_trend(self, symbol: str, hama_data: Dict[str, Any], screenshot_filename: str):
+    def _check_and_notify_trend(self, symbol: str, hama_data: Dict[str, Any], screenshot_filename: str) -> bool:
         """
-        检测趋势变化并发送邮件通知
+        检测趋势变化并发送邮件通知（新逻辑）
+
+        邮件发送规则：
+        1. 只有第一次检测到明确趋势（green/red）时才发送邮件
+        2. 如果已发送过邮件，就不再发送
+        3. 除非：HAMA状态变为盘整（neutral/gray）以外状态，才重置并发送新邮件
 
         Args:
             symbol: 币种符号
             hama_data: HAMA 数据
             screenshot_filename: 截图文件名
+
+        Returns:
+            邮件是否发送成功
         """
         if not self.email_notifier:
-            return
+            return False
+
+        email_was_sent = False
 
         try:
             # 获取当前状态
@@ -299,43 +471,80 @@ class HamaBraveMonitor:
             last_color = last_state.get('color', '')
             last_trend = last_state.get('trend', '')
 
-            # 检测趋势形成条件
+            # 获取邮件发送状态
+            email_status = self.get_email_status(symbol)
+            email_already_sent = email_status['email_sent']
+
+            # 判断是否为明确的趋势状态
+            has_clear_trend = current_color in ['green', 'red'] and current_trend in ['up', 'down']
+
+            # 判断是否为盘整状态
+            is_neutral = current_color not in ['green', 'red'] or current_trend not in ['up', 'down']
+
             should_notify = False
             cross_type = None
             notify_reason = ""
 
-            # 条件1: 颜色变化（从无到有，或从红变绿，从绿变红）
-            if last_color != current_color and current_color in ['green', 'red']:
+            # 情况1：当前是盘整状态，重置邮件状态（为下次趋势形成做准备）
+            if is_neutral and email_already_sent:
+                self.reset_email_status(symbol)
+                logger.info(f"{symbol} 状态变为盘整，邮件状态已重置")
+
+            # 情况2：首次检测到明确趋势 → 发送邮件
+            if has_clear_trend and not last_color:
                 should_notify = True
-                notify_reason = f"颜色变化: {last_color or '无'} → {current_color}"
+                notify_reason = f"首次检测到趋势: {current_color} ({current_trend})"
+
+            # 情况3：从盘整变为明确趋势 → 发送邮件
+            elif has_clear_trend and last_color not in ['green', 'red']:
+                should_notify = True
+                notify_reason = f"从盘整变为趋势: {current_color} ({current_trend})"
+
+            # 情况4：趋势方向发生变化（从up变down，或从down变up）→ 发送邮件
+            elif (last_trend in ['up', 'down'] and
+                  current_trend in ['up', 'down'] and
+                  last_trend != current_trend):
+                should_notify = True
+                notify_reason = f"趋势反转: {last_trend} → {current_trend}"
+
+                # 判断交叉类型
+                if current_trend == 'up' and last_trend == 'down':
+                    cross_type = "cross_up"  # 金叉
+                elif current_trend == 'down' and last_trend == 'up':
+                    cross_type = "cross_down"  # 死叉
+
+            # 情况5：颜色变化（从绿变红，或从红变绿）→ 发送邮件
+            elif (last_color in ['green', 'red'] and
+                  current_color in ['green', 'red'] and
+                  last_color != current_color):
+                should_notify = True
+                notify_reason = f"颜色变化: {last_color} → {current_color}"
+
+                # 判断交叉类型
                 if current_color == 'green' and last_color == 'red':
                     cross_type = "cross_up"  # 金叉
                 elif current_color == 'red' and last_color == 'green':
                     cross_type = "cross_down"  # 死叉
 
-            # 条件2: 首次检测到明确的趋势
-            if not last_color and current_color in ['green', 'red']:
-                should_notify = True
-                notify_reason = f"首次检测到趋势: {current_color}"
-
-            # 条件3: 趋势方向变化
-            if last_trend != current_trend and current_trend in ['up', 'down']:
-                should_notify = True
-                notify_reason = f"趋势变化: {last_trend or '无'} → {current_trend}"
+            # 检查是否已发送过邮件（避免重复发送）
+            if should_notify and email_already_sent and cross_type is None:
+                logger.info(f"{symbol} 已发送过邮件，跳过发送 ({notify_reason})")
+                should_notify = False
 
             # 发送邮件通知
             if should_notify:
                 logger.info(f"📧 {symbol} 检测到趋势变化: {notify_reason}，准备发送邮件...")
 
-                # 构建截图 URL（假设前端有访问截图的路由）
-                # 格式: http://localhost:5000/api/screenshots/filename
+                # 构建截图 URL
                 screenshot_url = f"http://localhost:5000/api/screenshots/{screenshot_filename}"
 
                 # 额外数据
                 extra_data = {
                     "通知原因": notify_reason,
                     "监控时间": hama_data.get('monitored_at', ''),
-                    "OCR 文本": hama_data.get('ocr_text', '')[:100]  # 只取前100字符
+                    "上次状态": f"{last_color or '无'} ({last_trend or '无'})",
+                    "当前状态": f"{current_color} ({current_trend})",
+                    "是否首次": "是" if not email_already_sent else "否"
                 }
 
                 # 发送邮件
@@ -352,6 +561,9 @@ class HamaBraveMonitor:
 
                 if success:
                     logger.info(f"✅ {symbol} 邮件通知发送成功")
+                    email_was_sent = True
+                    # 更新邮件发送状态
+                    self.update_email_status(symbol)
                 else:
                     logger.warning(f"⚠️ {symbol} 邮件通知发送失败")
 
@@ -362,10 +574,13 @@ class HamaBraveMonitor:
                 'value': current_value
             }
 
+            return email_was_sent
+
         except Exception as e:
             logger.error(f"趋势检测失败 {symbol}: {e}")
             import traceback
             logger.error(traceback.format_exc())
+            return False
 
     def monitor_batch(self, symbols: List[str], browser_type: str = 'chromium') -> Dict[str, Any]:
         """

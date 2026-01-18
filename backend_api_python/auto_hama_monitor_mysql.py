@@ -66,7 +66,7 @@ def auto_monitor():
 
     # 初始化监控器
     print("\n正在初始化 Brave 监控器...")
-    monitor = HamaBraveMonitor(db_client=db_client, cache_ttl=900)
+    monitor = HamaBraveMonitor(db_client=db_client, cache_ttl=900, enable_email=True)
 
     if not monitor.ocr_extractor:
         print("❌ OCR 提取器未初始化，无法继续")
@@ -75,6 +75,7 @@ def auto_monitor():
     print("✅ 监控器初始化成功")
     print(f"  可用: {monitor.ocr_extractor is not None}")
     print(f"  存储: {'MySQL' if db_client else '内存'}")
+    print(f"  邮件通知: {'✅ 已启用' if monitor.email_notifier else '❌ 未启用'}")
 
     # 显示数据库统计
     if db_client:
