@@ -1,1 +1,99 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 日志
+*.log
+logs/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# Local runtime data (do not commit)
+quantdinger.db
+*.db
+/data/
+app/data/
+
+# 测试和调试文件
+test_*.py
+*_test.py
+*_test.png
+test.png
+test_screenshot.png
+hama_test_*.json
+super_test_results_*.json
+
+# 浏览器配置和缓存
+brave_profile_test/
+GraphiteDawnCache/
+ShaderCache/
+*.crswap
+Last Version
+Local State
+
+# 截图和图片
+screenshots/
+screenshot/
+*.png
+*.jpg
+*.jpeg
+
+# 临时文件
+nul
+temp_*.txt
+*.tmp
+*.bak
+*.backup
+
+# SQL 文件
+sql/
+
+# 脚本输出
+*.json.test
+*.report.json
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
