@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试截图访问</title>
+</head>
+<body>
+    <h1>HAMA 截图测试</h1>
+    <p>测试截图 URL 访问</p>
+    
+    <h2>BTCUSDT</h2>
+    <img src="http://localhost:5000/screenshot/hama_brave_BTCUSDT_1768728140.png" 
+         alt="BTCUSDT HAMA截图" 
+         style="width: 280px; height: 180px; border: 1px solid #ccc;"
+         onerror="this.parentElement.innerHTML='加载失败'; this.style.display='none';"
+         onload="this.parentElement.innerHTML='加载成功';">
+    
+    <h2>ETHUSDT</h2>
+    <img src="http://localhost:5000/screenshot/hama_brave_ETHUSDT_1768727336.png" 
+         alt="ETHUSDT HAMA截图" 
+         style="width: 280px; height: 180px; border: 1px solid #ccc;"
+         onerror="this.parentElement.innerHTML='加载失败'; this.style.display='none';"
+         onload="this.parentElement.innerHTML='加载成功';">
+    
+    <h2>直接访问测试</h2>
+    <a href="http://localhost:5000/screenshot/hama_brave_BTCUSDT_1768728140.png" target="_blank">
+        在新标签页打开 BTCUSDT 截图
+    </a>
+</body>
+</html>
