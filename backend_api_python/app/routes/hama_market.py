@@ -221,6 +221,9 @@ def get_hama_watchlist():
                             'hama_trend': brave_hama.get('hama_trend'),
                             'hama_color': brave_hama.get('hama_color'),
                             'hama_value': brave_hama.get('hama_value'),
+                            'candle_ma_status': brave_hama.get('candle_ma_status'),  # 蜡烛/MA状态
+                            'bollinger_status': brave_hama.get('bollinger_status'),  # 布林带状态
+                            'last_cross_info': brave_hama.get('last_cross_info'),  # 最近交叉
                             'screenshot_path': screenshot_path,  # 本地文件路径
                             'screenshot_url': screenshot_url,  # 访问URL
                             'cached_at': brave_hama.get('cached_at'),

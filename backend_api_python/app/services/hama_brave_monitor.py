@@ -154,13 +154,18 @@ class HamaBraveMonitor:
                 conn.close()
 
                 if row:
+                    # 将 Row 对象转换为字典以支持 .get() 方法
+                    row_dict = dict(row)
                     return {
-                        'hama_trend': row['hama_trend'],
-                        'hama_color': row['hama_color'],
-                        'hama_value': float(row['hama_value']) if row['hama_value'] else None,
-                        'price': float(row['price']) if row['price'] else None,
-                        'screenshot_path': row['screenshot_path'],  # 添加截图路径
-                        'cached_at': row['monitored_at'],
+                        'hama_trend': row_dict['hama_trend'],
+                        'hama_color': row_dict['hama_color'],
+                        'hama_value': float(row_dict['hama_value']) if row_dict['hama_value'] else None,
+                        'price': float(row_dict['price']) if row_dict['price'] else None,
+                        'candle_ma_status': row_dict.get('candle_ma_status'),  # 蜡烛/MA状态
+                        'bollinger_status': row_dict.get('bollinger_status'),  # 布林带状态
+                        'last_cross_info': row_dict.get('last_cross_info'),  # 最近交叉
+                        'screenshot_path': row_dict['screenshot_path'],  # 添加截图路径
+                        'cached_at': row_dict['monitored_at'],
                         'cache_source': 'sqlite_brave_monitor'
                     }
             except Exception as e:
@@ -205,8 +210,8 @@ class HamaBraveMonitor:
 
                 cursor.execute('''
                     INSERT OR REPLACE INTO hama_monitor_cache
-                    (symbol, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, monitored_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (symbol, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, candle_ma_status, bollinger_status, last_cross_info, monitored_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     hama_data.get('trend'),  # 修复：使用 'trend' 而不是 'hama_trend'
@@ -215,6 +220,9 @@ class HamaBraveMonitor:
                     hama_data.get('price'),
                     hama_data.get('ocr_text', ''),
                     hama_data.get('screenshot_path', ''),  # 保存截图路径
+                    hama_data.get('candle_ma_status', ''),  # 蜡烛/MA状态
+                    hama_data.get('bollinger_status', ''),  # 布林带状态
+                    hama_data.get('last_cross_info', ''),  # 最近交叉
                     datetime.now()
                 ))
 
@@ -290,7 +298,7 @@ class HamaBraveMonitor:
             self.set_cached_hama(symbol, hama_data)
 
             logger.info(f"{symbol} HAMA 状态: {hama_data.get('color', 'unknown')} ({hama_data.get('trend', 'unknown')})")
-            return hama
+            return hama_data
 
         except Exception as e:
             logger.error(f"监控 {symbol} 失败: {e}")
