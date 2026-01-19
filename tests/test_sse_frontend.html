@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE 实时价格测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .price-update {
+            animation: flash 0.5s ease-in-out;
+        }
+        @keyframes flash {
+            0% { background-color: rgba(24, 144, 255, 0.3); }
+            100% { background-color: transparent; }
+        }
+        .positive { color: #52c41a; }
+        .negative { color: #f5222d; }
+    </style>
+</head>
+<body>
+    <h1>SSE 实时价格测试页面</h1>
+
+    <div id="status" class="status disconnected">
+        状态: 未连接
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>币种</th>
+                <th>价格</th>
+                <th>涨跌幅</th>
+                <th>时间</th>
+            </tr>
+        </thead>
+        <tbody id="priceTable">
+            <tr><td colspan="4">等待数据...</td></tr>
+        </tbody>
+    </table>
+
+    <h2>最新消息日志</h2>
+    <pre id="log" style="background: #f5f5f5; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></pre>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const priceTable = document.getElementById('priceTable');
+        const logDiv = document.getElementById('log');
+
+        const prices = {};
+        let messageCount = 0;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent = `[${timestamp}] ${message}\n` + logDiv.textContent;
+            messageCount++;
+            if (messageCount > 50) {
+                // 只保留最近50条
+                logDiv.textContent = logDiv.textContent.split('\n').slice(0, 50).join('\n');
+            }
+        }
+
+        // 连接到 SSE
+        const eventSource = new EventSource('/api/sse/prices');
+
+        eventSource.addEventListener('connected', (event) => {
+            log('✅ 已连接到价格推送服务');
+            statusDiv.textContent = '状态: 已连接';
+            statusDiv.className = 'status connected';
+        });
+
+        eventSource.addEventListener('price', (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                log(`📡 收到价格: ${data.symbol} = ${data.price} (${data.change24h}%)`);
+
+                // 存储价格数据
+                prices[data.symbol] = data;
+
+                // 更新表格
+                updateTable();
+            } catch (error) {
+                log(`❌ 解析错误: ${error.message}`);
+            }
+        });
+
+        eventSource.addEventListener('heartbeat', (event) => {
+            log('💓 心跳');
+        });
+
+        eventSource.onerror = (error) => {
+            log('❌ 连接错误');
+            statusDiv.textContent = '状态: 连接错误';
+            statusDiv.className = 'status disconnected';
+        };
+
+        eventSource.onopen = () => {
+            log('🔗 连接已打开');
+        };
+
+        function updateTable() {
+            const symbols = Object.keys(prices).sort();
+
+            if (symbols.length === 0) {
+                priceTable.innerHTML = '<tr><td colspan="4">等待数据...</td></tr>';
+                return;
+            }
+
+            let html = '';
+            symbols.forEach(symbol => {
+                const data = prices[symbol];
+                const changeClass = data.change24h >= 0 ? 'positive' : 'negative';
+                const changeIcon = data.change24h >= 0 ? '▲' : '▼';
+
+                html += `
+                    <tr class="price-update">
+                        <td><strong>${symbol}</strong></td>
+                        <td>$${data.price.toFixed(data.price >= 1 ? 4 : 6)}</td>
+                        <td class="${changeClass}">${changeIcon} ${Math.abs(data.change24h).toFixed(2)}%</td>
+                        <td>${new Date(data.timestamp).toLocaleTimeString()}</td>
+                    </tr>
+                `;
+            });
+
+            priceTable.innerHTML = html;
+
+            // 移除闪烁动画类
+            setTimeout(() => {
+                const rows = priceTable.querySelectorAll('tr');
+                rows.forEach(row => row.classList.remove('price-update'));
+            }, 500);
+        }
+
+        log('正在连接到 SSE...');
+    </script>
+</body>
+</html>
