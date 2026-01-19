@@ -500,15 +500,23 @@ def create_app(config_name='default'):
         # 4. 初始化HAMA Brave监控器
         _hama_brave_monitor = init_hama_brave_monitor()
 
-        # 5. 启动 HAMA 监控 Worker (后台自动监控)
+        # 5. 初始化邮件通知器
         import os
+        try:
+            from app.services.hama_email_notifier import get_hama_email_notifier
+            email_notifier = get_hama_email_notifier()
+            logger.info("✅ HAMA 邮件通知器已初始化")
+        except Exception as e:
+            logger.error(f"初始化 HAMA 邮件通知器失败: {e}")
+
+        # 6. 启动 HAMA 监控 Worker (后台自动监控 + 邮件通知)
         enable_hama_worker = os.getenv('ENABLE_HAMA_WORKER', 'true').lower() == 'true'
         if enable_hama_worker and _hama_brave_monitor:
             try:
                 from app.services.hama_monitor_worker import get_hama_monitor_worker
                 worker = get_hama_monitor_worker()
                 worker.start()
-                logger.info("✅ HAMA 监控 Worker 已启动 (后台自动监控)")
+                logger.info("✅ HAMA 监控 Worker 已启动 (后台自动监控 + 邮件通知)")
             except Exception as e:
                 logger.error(f"启动 HAMA 监控 Worker 失败: {e}")
 

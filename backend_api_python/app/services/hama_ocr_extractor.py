@@ -428,12 +428,13 @@ class HAMAOCRExtractor:
                 page_height = viewport_size['height']
 
                 # 计算截图区域: 精确定位到右下角 HAMA 指标面板
-                # HAMA 信息面板是表格形式，通常在右下角，约占页面 25% 宽度，35% 高度
+                # HAMA 信息面板是表格形式，通常在右下角
+                # 只截取从"价格"到"最近交叉"的区域
                 clip = {
                     'x': int(page_width * 0.72),   # 从页面 72% 处开始（右侧28%）
-                    'y': int(page_height * 0.60),  # 从页面 60% 处开始（底部40%）
+                    'y': int(page_height * 0.45),  # 从页面 45% 处开始（往上移动，从55%改为45%）
                     'width': int(page_width * 0.28),   # 截取右侧28%宽度
-                    'height': int(page_height * 0.40)  # 截取底部40%高度
+                    'height': int(page_height * 0.55)  # 截取底部55%高度（增加高度以包含完整区域）
                 }
 
                 logger.info(f"页面尺寸: {page_width}x{page_height}, 截图区域: x={clip['x']}, y={clip['y']}, width={clip['width']}, height={clip['height']}")
@@ -558,7 +559,8 @@ class HAMAOCRExtractor:
         hama_color = 'gray'
         trend = 'neutral'
         current_price = None
-        bollinger_status = 'normal'
+        bollinger_status = None
+        candle_ma_status = None
         last_cross_info = None
 
         # 合并所有文本，保持行结构
@@ -568,30 +570,118 @@ class HAMAOCRExtractor:
         logger.debug(f"OCR 识别文本:\n{line_text}")
 
         # 1. 查找价格（"价格" 标签后的数值）
-        price_patterns = [
-            r'价格\s*[:：]?\s*([\d,]+\.?\d*)',
-            r'Price\s*[:：]?\s*([\d,]+\.?\d*)',
-        ]
+        # 新策略：先找到"价格"标签的位置，然后在其后面查找数值
+        # 处理两种格式：
+        #   格式1: "价格 3210.82" (同行，用空格分隔)
+        #   格式2: "价格\n3210.82" (跨行，"价格"单独一行)
 
-        for pattern in price_patterns:
-            matches = re.findall(pattern, full_text)
-            if matches:
-                try:
-                    current_price = float(matches[0].replace(',', ''))
-                    logger.debug(f"识别价格: {current_price}")
+        # 方法1: 使用 line_text 查找 "价格" 后面的数值（跨行格式）
+        lines = text_lines
+        for i, line in enumerate(lines):
+            # 检查这一行是否包含"价格"标签（中文或英文）
+            line_lower = line.lower().strip()
+            if '价格' in line or 'price' in line_lower:
+                # 如果这一行只有"价格"标签（中文或英文），检查下一行
+                # 使用更宽松的匹配：行内容只包含 "价格" 或 "price"（大小写不敏感）
+                if (re.match(r'^\s*价格\s*$', line, re.IGNORECASE) or
+                    re.match(r'^\s*price\s*$', line, re.IGNORECASE)):
+                    # 检查下一行是否为数值
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        price_match = re.match(r'^([\d,]+\.?\d*)$', next_line)
+                        if price_match:
+                            try:
+                                value = float(price_match.group(1).replace(',', ''))
+                                if value >= 0.001:  # 合理价格
+                                    current_price = value
+                                    logger.info(f"✅ 从价格标签下一行识别到: {current_price}")
+                                    break
+                            except:
+                                pass
+
+                # 如果这一行包含"价格"和数值（格式: "价格 3210.82" 或 "price 3210.82"）
+                if not current_price:
+                    # 查找"价格"后面的数值（支持中文和英文）
+                    price_pattern_cn = r'价格\s+([\d,]+\.?\d*)'
+                    price_pattern_en = r'price\s+([\d,]+\.?\d*)'
+                    match = re.search(price_pattern_cn, line) or re.search(price_pattern_en, line, re.IGNORECASE)
+                    if match:
+                        try:
+                            value = float(match.group(1).replace(',', ''))
+                            if value >= 0.001:
+                                current_price = value
+                                logger.info(f"✅ 从价格标签同行识别到: {current_price}")
+                                break
+                        except:
+                            pass
+
+        # 方法2: 如果上面的方法没找到，使用原来的正则表达式（兼容性）
+        if not current_price:
+            price_patterns = [
+                r'价格\s*[:：]?\s*([\d,]+\.?\d*)',
+                r'price\s*[:：]?\s*([\d,]+\.?\d*)',  # 支持小写 price
+                r'Price\s*[:：]?\s*([\d,]+\.?\d*)',
+                r'\*价格\s*[:：]?\s*([\d,]+\.?\d*)',  # 添加：处理 *价格 格式
+            ]
+
+            for pattern in price_patterns:
+                matches = re.findall(pattern, full_text, re.IGNORECASE)  # 大小写不敏感
+                if matches:
+                    for match in matches:
+                        try:
+                            value = float(match.replace(',', ''))
+                            # 验证是否为合理价格（排除时间如 03, 24）
+                            # 价格应该 >= 0.001 或者 >= 100
+                            if value >= 0.001 and value != int(value):  # 排除整数时间
+                                current_price = value
+                                logger.info(f"✅ 从正则表达式识别到价格: {current_price}")
+                                break
+                            elif value >= 100:  # 大数值价格
+                                current_price = value
+                                logger.info(f"✅ 从正则表达式识别到大数值价格: {current_price}")
+                                break
+                        except:
+                            continue
+                if current_price:
                     break
-                except:
-                    continue
 
-        # 如果没有找到价格标签，尝试查找第一个合理数值
+        # 如果没有找到价格标签，尝试在 OCR 文本行中查找
+        # 很多时候价格在"价格"标签的前一行或前两行
+        if not current_price:
+            lines = text_lines
+            for i, line in enumerate(lines):
+                # 如果这一行包含"价格"或"格"（部分匹配），检查前两行
+                if '价格' in line or 'Price' in line.lower() or '格' in line:
+                    # 检查前两行
+                    for j in range(max(0, i-2), i):
+                        check_line = lines[j].strip()
+                        price_match = re.search(r'([\d,]+\.?\d*)', check_line)
+                        if price_match:
+                            try:
+                                value = float(price_match.group(1).replace(',', ''))
+                                # 合理的价格范围检查
+                                if value >= 1000:  # BTC等大数值价格
+                                    current_price = value
+                                    logger.debug(f"从价格标签前{i-j}行识别到: {current_price}")
+                                    break
+                                elif value >= 0.001 and value < 1000:  # 小数值价格
+                                    current_price = value
+                                    logger.debug(f"从价格标签前{i-j}行识别到小数价格: {current_price}")
+                                    break
+                            except:
+                                pass
+                    if current_price:
+                        break
+
+        # 如果还是没有找到价格标签，尝试查找第一个合理数值
         # 优先匹配带小数点的价格（如 0.3939），然后匹配大数值（如 95000）
         if not current_price:
-            # 先查找小数价格（0.001 - 100）
+            # 先查找小数价格（0.001 - 1000，扩大范围）
             for match in re.finditer(r'(0\.\d+|[1-9]\d*\.\d+)', full_text):
                 try:
                     value = float(match.group(1).replace(',', ''))
-                    # 小数价格范围（0.001 - 100）
-                    if 0.001 <= value <= 100:
+                    # 价格范围（0.001 - 1000），支持更多币种价格
+                    if 0.001 <= value <= 1000:
                         current_price = value
                         logger.debug(f"识别小数价格: {current_price}")
                         break
@@ -635,20 +725,42 @@ class HAMAOCRExtractor:
                 break
 
         # 3. 查找布林带状态（"状态" 标签后的文本）
+        # 使用 line_text 保留换行，遍历所有匹配找到包含关键词的
         bb_status_patterns = [
-            r'状态\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
-            r'Status\s*[:：]?\s*([^\s]+(?:\s+[^\s]+)?)',
+            r'状态\s*[:：]?\s*([^\n]+)',
+            r'Status\s*[:：]?\s*([^\n]+)',
         ]
 
         for pattern in bb_status_patterns:
-            matches = re.findall(pattern, full_text)
+            matches = re.findall(pattern, line_text)
             if matches:
-                status_text = matches[0].strip()
-                if '收缩' in status_text or 'squeeze' in status_text.lower():
-                    bollinger_status = 'squeeze'
-                elif '扩张' in status_text or 'expansion' in status_text.lower():
-                    bollinger_status = 'expansion'
-                logger.debug(f"识别布林带状态: {bollinger_status}")
+                for status_text in matches:
+                    status_text = status_text.strip()
+                    # 验证是否包含有效的状态关键词
+                    if '收缩' in status_text or 'squeeze' in status_text.lower():
+                        bollinger_status = 'squeeze'
+                    elif '扩张' in status_text or 'expansion' in status_text.lower():
+                        bollinger_status = 'expansion'
+                    elif '正常' in status_text or 'normal' in status_text.lower():
+                        bollinger_status = 'normal'
+                    if bollinger_status:
+                        logger.debug(f"识别布林带状态: {bollinger_status}")
+                        break
+            if bollinger_status:
+                break
+
+        # 3.5 查找蜡烛/MA状态（"蜡烛/MA" 标签后的文本）
+        candle_ma_patterns = [
+            r'蜡烛/MA\s*[:：]?\s*([^\n]+)',
+            r'昔烛/MA\s*[:：]?\s*([^\n]+)',  # OCR 可能识别错误
+            r'Candle/MA\s*[:：]?\s*([^\n]+)',
+        ]
+
+        for pattern in candle_ma_patterns:
+            matches = re.findall(pattern, line_text)
+            if matches:
+                candle_ma_status = matches[0].strip()
+                logger.info(f"识别蜡烛/MA状态: {candle_ma_status}")
                 break
 
         # 4. 查找最近交叉信息（"最近交叉" 标签后的文本）
@@ -696,6 +808,7 @@ class HAMAOCRExtractor:
             'trend': trend,
             'current_price': current_price,
             'bollinger_status': bollinger_status,
+            'candle_ma_status': candle_ma_status,  # 蜡烛/MA 状态
             'last_cross_info': last_cross_info,
             'hama_status': f"{trend}_trend",  # 兼容旧格式
             'ocr_engine': self.ocr_engine,

@@ -90,7 +90,10 @@
       "Bash(git fetch:*)",
       "Bash(git reset:*)",
       "Bash(git restore:*)",
-      "Bash(for:*)"
+      "Bash(for:*)",
+      "Bash(wmic:*)",
+      "Bash(kill:*)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>HAMA API 测试</title>
+</head>
+<body>
+    <h1>HAMA 行情 API 测试</h1>
+    <button onclick="testAPI()">测试 API</button>
+    <pre id="result"></pre>
+
+    <script>
+    async function testAPI() {
+        const result = document.getElementById('result');
+        result.textContent = '正在请求...';
+
+        try {
+            console.log('开始请求 API...');
+            const response = await fetch('/api/hama-market/watchlist?symbols=BTCUSDT,ETHUSDT');
+            console.log('响应状态:', response.status);
+
+            const data = await response.json();
+            console.log('响应数据:', data);
+
+            result.textContent = '成功！\n\n' + JSON.stringify(data, null, 2);
+        } catch (error) {
+            console.error('错误:', error);
+            result.textContent = '错误: ' + error.message;
+        }
+    }
+
+    // 页面加载后自动测试
+    window.onload = function() {
+        console.log('页面已加载');
+        setTimeout(testAPI, 1000);
+    };
+    </script>
+</body>
+</html>
