@@ -93,7 +93,8 @@
       "Bash(for:*)",
       "Bash(wmic:*)",
       "Bash(kill:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
