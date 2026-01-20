@@ -12,10 +12,13 @@ Brave浏览器路径：C:\Program Files\BraveSoftware\Brave-Browser\Application\
 
 hama指标访问流程：
 
-启动worker  Brave监控 启动无头浏览器 使用账号密码自动登录 访问tradingview页面 截图右下角的hama指标
+启动worker  Brave监控 启动brave无头浏览器 使用账号密码自动登录 访问tradingview页面 截图右下角的hama指标
 然后进行OCR识别，保存结果到数据库，前端调用接口 查询数据库展示
 
 
 QQ邮件
 邮箱：32319731984@qq.com
 授权码： agwnmwaexbytbicf
+
+
+所有新创建的都按规则放入分别的文件夹，md放docs文件夹，bat放bat文件夹

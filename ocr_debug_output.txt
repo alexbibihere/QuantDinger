@@ -1,0 +1,48 @@
+[33mChecking connectivity to the model hosters, this may take a while. To bypass this check, set `DISABLE_MODEL_SOURCE_CHECK` to `True`.[0m
+–≈œ¢: ”√Ã·π©µƒƒ£ ΩŒﬁ∑®’“µΩŒƒº˛°£
+C:\python\Lib\site-packages\paddle\utils\cpp_extension\extension_utils.py:718: UserWarning: No ccache found. Please be aware that recompiling all source files may be required. You can download and install ccache from: https://github.com/ccache/ccache/blob/master/doc/INSTALL.md
+  warnings.warn(warning_message)
+[32mCreating model: ('PP-LCNet_x1_0_doc_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_doc_ori`.[0m
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I0120 10:00:24.688016 67484 onednn_context.cc:81] oneDNN v3.6.2
+[32mCreating model: ('UVDoc', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\UVDoc`.[0m
+[32mCreating model: ('PP-LCNet_x1_0_textline_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_textline_ori`.[0m
+[32mCreating model: ('PP-OCRv5_server_det', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-OCRv5_server_det`.[0m
+[32mCreating model: ('PP-OCRv5_server_rec', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-OCRv5_server_rec`.[0m
+d:\github\QuantDinger\debug_ocr.py:45: DeprecationWarning: The parameter `use_angle_cls` has been deprecated and will be removed in the future. Please use `use_textline_orientation` instead.
+  ocr = PaddleOCR(lang='en', use_angle_cls=True)
+[32mCreating model: ('PP-LCNet_x1_0_doc_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_doc_ori`.[0m
+[32mCreating model: ('UVDoc', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\UVDoc`.[0m
+[32mCreating model: ('PP-LCNet_x1_0_textline_ori', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-LCNet_x1_0_textline_ori`.[0m
+[32mCreating model: ('PP-OCRv5_server_det', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\PP-OCRv5_server_det`.[0m
+[32mCreating model: ('en_PP-OCRv5_mobile_rec', None)[0m
+[32mModel files already exist. Using cached files. To redownload, please delete the directory manually: `C:\Users\WISIG\.paddlex\official_models\en_PP-OCRv5_mobile_rec`.[0m
+d:\github\QuantDinger\debug_ocr.py:46: DeprecationWarning: Please use `predict` instead.
+  result = ocr.ocr(image_path, cls=True)
+Traceback (most recent call last):
+  File "d:\github\QuantDinger\debug_ocr.py", line 46, in main
+    result = ocr.ocr(image_path, cls=True)
+  File "C:\python\Lib\warnings.py", line 637, in wrapper
+    return arg(*args, **kwargs)
+  File "C:\python\Lib\site-packages\paddleocr\_pipelines\ocr.py", line 231, in ocr
+    return self.predict(img, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+TypeError: PaddleOCR.predict() got an unexpected keyword argument 'cls'
+================================================================================
+Ë∞ÉËØï OCR ËØÜÂà´
+================================================================================
+
+üì∑ ÂõæÁâáË∑ØÂæÑ: backend_api_python/app/screenshots/hama_brave_BTCUSDT_1768873755.png
+
+üîç Ê≠£Âú®ÊâßË°å OCR...
+
+‚ùå OCR ËØÜÂà´Â§±Ë¥•: PaddleOCR.predict() got an unexpected keyword argument 'cls'

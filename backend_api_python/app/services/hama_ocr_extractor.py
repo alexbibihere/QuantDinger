@@ -519,14 +519,35 @@ class HAMAOCRExtractor:
 
         # 提取所有文字
         text_lines = []
-        for line in result:
-            if line and len(line) > 0:
-                for word_info in line:
-                    if word_info and len(word_info) > 1:
-                        text = word_info[0]
-                        confidence = word_info[1][1]
+
+        # 新版 PaddleOCR 返回格式: [OCRResult]
+        # OCRResult 是一个类，支持 dict 接口
+        try:
+            if result and len(result) > 0:
+                ocr_result = result[0]
+
+                # 检查是否为新的 OCRResult 格式
+                if hasattr(ocr_result, '__getitem__') and 'rec_texts' in ocr_result:
+                    # 新版 PaddleOCR (paddlex)
+                    texts = ocr_result['rec_texts']
+                    scores = ocr_result.get('rec_scores', [])
+
+                    for i, text in enumerate(texts):
+                        confidence = scores[i] if i < len(scores) else 1.0
                         if confidence > 0.5:  # 置信度阈值
                             text_lines.append(text)
+                elif isinstance(ocr_result, list):
+                    # 旧版 PaddleOCR 格式: [[bbox, (text, confidence)], ...]
+                    for line in ocr_result:
+                        if line and len(line) >= 2:
+                            text_info = line[1]
+                            if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                                text = text_info[0]
+                                confidence = text_info[1]
+                                if confidence > 0.5:
+                                    text_lines.append(text)
+        except Exception as e:
+            logger.warning(f"PaddleOCR 结果解析异常: {e}")
 
         return text_lines
 
