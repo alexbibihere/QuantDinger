@@ -1,686 +1,1580 @@
-# CLAUDE.md
+# QuantDinger 前端架构技术文档
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> 本文档详细说明了 QuantDinger 项目前端各主要页面的技术架构、实现逻辑和技术要点，便于后续维护和开发。
 
-## 项目概述
+## 目录
 
-QuantDinger 是一个本地优先、隐私优先的 AI 驱动量化交易平台。系统完全在本地运行，用户对策略、交易数据和 API 密钥拥有完全控制权。
+- [技术栈概览](#技术栈概览)
+- [1. Dashboard (仪表盘)](#1-dashboard-仪表盘)
+- [2. HAMA Market (HAMA行情监控)](#2-hama-market-hama行情监控)
+- [3. TradingView Scanner (交易视图扫描器)](#3-tradingview-scanner-交易视图扫描器)
+- [4. Smart Monitor (智能监控)](#4-smart-monitor-智能监控)
+- [5. Indicator Analysis (指标分析)](#5-indicator-analysis-指标分析)
+- [6. Trading Assistant (交易助手)](#6-trading-assistant-交易助手)
+- [7. Settings (设置)](#7-settings-设置)
+- [通用技术方案](#通用技术方案)
 
-### 关键特性
-- **本地优先**: 所有数据存储在本地，API 密钥不上传
-- **隐私保护**: 不收集用户数据，不使用云端追踪
-- **AI 多代理系统**: 内置 AI 分析系统（市场、基本面、新闻、情绪、风险）
-- **HAMA 指标**: 支持从 TradingView 获取 HAMA 指标数据（本地计算 + OCR 识别 + Playwright 自动化）
-- **多市场支持**: Crypto（实时交易）、US/CN Stocks、Forex、Futures
+---
 
-## TradingView Cookie
-```
-cookiePrivacyPreferenceBannerProduction=notApplicable; _ga=GA1.1.1866852168.1760819691; cookiesSettings={"analytics":true,"advertising":true}; device_t=OThMTjowLDRibHJCUTow.albLE7WBs_dZ5drzD6kWjXsL7iQmttVDo3lvzVFUq90; sessionid=ki9qy7vvfk3h19qp0qd64exhonzapfrd; sessionid_sign=v3:cBmutdL9L5e4Y27C8skCR/dCbqBKOzvhheZiwjOQqOc=; tv_ecuid=2f707cb5-e0fd-457d-a12e-af14f34bee79; __gads=ID=14f07cdc5b671962:T=1767987209:RT=1768623944:S=ALNI_MYMXuccOjaGeS7V3qeAdjzkcw9H7w; __gpi=UID=000011e07ded39b9:T=1767987209:RT=1768623944:S=ALNI_MZvLD6OWj01o8fzaR8AwA3B6hMakg; __eoi=ID=94061d16f7692d1d:T=1767987209:RT=1768623944:S=AA-AfjbJz4kBsqzI2qydEXWmmZ2m; _ga_YVVRYGL0E0=GS2.1.s1768635293$o39$g0$t1768635293$j60$l0$h0; _sp_id.cf1a=4ae0f691-127b-49ab-b10b-1895c52c78ba.1760819689.31.1768635294.1768627525.a86976df-8efe-4226-b331-f53bab04cb2b.aed6ac03-dab9-4ea2-999e-d51dc101efba.57d2806a-6505-417b-b17c-d2f86fa0dd3c.1768635293698.1; _sp_ses.cf1a=*
-```
+## 技术栈概览
 
-## tv account
+### 核心框架
+- **Vue 2.6.14** - 前端MVVM框架
+- **Vue Router 3.5.3** - 路由管理（Hash模式）
+- **Vuex 3.6.2** - 状态管理
+- **Ant Design Vue 1.7.8** - UI组件库
+- **Axios 0.26.1** - HTTP客户端
 
-账号 alexbibiherr
-密码 Iam5323..
+### 图表可视化
+- **ECharts 6.0.0** - 主要图表库（饼图、折线图、柱状图等）
+- **Lightweight Charts 5.0.8** - TradingView轻量级图表
+- **KlineCharts 9.8.0** - K线图表
 
-永远用中文回复
+### 工具库
+- **Moment.js 2.29.2** - 时间处理
+- **Crypto-js 4.2.0** - 加密
+- **Lodash** - 数据处理
+- **Vue i18n 8.27.1** - 国际化
 
+### 开发工具
+- **Vue CLI 5.0.8** - 项目脚手架
+- **Less 3.13.1** - CSS预处理器
+- **ESLint** - 代码检查
+- **Sass** - CSS预处理器
 
-## 架构概览
+---
 
-### 环境配置文件
+## 1. Dashboard (仪表盘)
 
-#### 后端配置
-- `backend_api_python/.env` - 后端环境变量（包含数据库、代理、API 密钥等）
-- `backend_api_python/env.example` - 环境变量模板
+### 页面功能概述
+Dashboard 是系统的核心数据展示中心，提供：
+- 总览KPI指标（总权益、胜率、盈亏比、最大回撤等）
+- 收益日历热力图
+- 策略分布饼图
+- 回撤曲线图
+- 交易时段分布图
+- 策略排行榜
+- 当前持仓列表
+- 最近交易记录
+- 待执行订单列表（带声音提醒）
 
-#### 重要配置项
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\dashboard\index.vue`
 
-```bash
-# 数据库
-SQLITE_DATABASE_FILE=/app/data/quantdinger.db
+### 核心技术栈
+- **ECharts** - 图表渲染
+- **Vuex** - 状态管理（主题、导航）
+- **Web Audio API** - 订单声音提醒
+- **Ant Design Vue** - UI组件
 
-# HAMA 监控
-BRAVE_MONITOR_ENABLED=true
-BRAVE_MONITOR_CACHE_TTL=900
-BRAVE_MONITOR_AUTO_START=true
-BRAVE_MONITOR_INTERVAL=600
-BRAVE_MONITOR_SYMBOLS=BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT
-BRAVE_MONITOR_BROWSER_TYPE=brave
+### 数据流和API调用
 
-# AI/LLM
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=openai/gpt-4o
-
-# 代理（如需要）
-PROXY_PORT=7890
-PROXY_HOST=127.0.0.1
-```
-
-#### TradingView 配置
-- `backend_api_python/tradingview_cookies.json` - TradingView Cookie 和账户信息
-- `backend_api_python/file/tradingview.txt` - TradingView 图表链接和账户
-
-### API 路由结构
-
-**30 个 API 路由模块** ([`app/routes/`](backend_api_python/app/routes/)):
-
-核心路由:
-- [health.py](backend_api_python/app/routes/health.py) - 健康检查
-- [auth.py](backend_api_python/app/routes/auth.py) - 用户认证
-- [market.py](backend_api_python/app/routes/market.py) - 市场数据
-- [kline.py](backend_api_python/app/routes/kline.py) - K线数据
-- [hama_market.py](backend_api_python/app/routes/hama_market.py) - HAMA 行情（本地计算 + Brave 监控）
-- [indicator.py](backend_api_python/app/routes/indicator.py) - 指标管理
-- [strategy.py](backend_api_python/app/routes/strategy.py) - 策略管理
-- [backtest.py](backend/python/app/routes/backtest.py) - 回测
-- [analysis.py](backend_api_python/app/routes/analysis.py) - AI 多代理分析
-- [tradingview_scanner.py](backend_api_python/app/routes/tradingview_scanner.py) - TradingView Scanner
-
-### 工作流程说明
-
-#### 策略开发流程
-
-```
-1. 编写 Python 指标代码
-2. 创建策略配置（风险管理：Stop-Loss/TP/MACD）
-3. 回测 + AI 参数优化
-4. 实时交易（Crypto）或信号通知（Stock/Forex）
+```javascript
+// 主要API端点
+GET /api/dashboard/summary        // 获取仪表盘汇总数据
+GET /api/dashboard/pendingOrders  // 获取待执行订单列表
 ```
 
-#### HAMA 数据流程（当前架构）
+**数据流程**:
+1. 组件挂载时调用 `fetchData()` 获取汇总数据
+2. 并行调用 `fetchPendingOrders()` 获取订单列表
+3. 启动订单轮询 `startOrderPolling()` 每5秒检查新订单
+4. 数据加载完成后 `$nextTick` 中初始化ECharts图表
 
-```
-主要数据源: 本地计算（2-5秒）
-    ↓
-验证数据源: Brave 监控（每10分钟）
-    ├─ Playwright 访问 TradingView
-    ├─ 截图 HAMA 面板
-    ├─ RapidOCR 识别
-    └─ 保存到 SQLite
-```
+### 关键组件和交互逻辑
 
-#### 数据存储
-
-```
-本地数据库: backend_api_python/data/quantdinger.db
-    ├─ 业务表（16个表）
-    ├─ HAMA 表（2个表）
-    └─ AI 代理记忆表（独立数据库）
-
-AI 代理记忆: backend_api_python/data/memory/*.db
-    ├─ 每个代理独立的数据库
-    └─ 存储：历史决策、分析结果
+#### 1.1 KPI卡片组件
+```javascript
+// 六大KPI指标
+- 总权益 (kpi-primary): 蓝色渐变背景
+- 胜率 (kpi-win-rate): 带环形进度条
+- 盈亏比 (kpi-profit-factor): 紫色主题
+- 最大回撤 (kpi-drawdown): 红色警告
+- 总交易数 (kpi-trades): 青色主题
+- 运行策略 (kpi-strategies): 可点击跳转
 ```
 
-### 常用开发命令
+**技术亮点**:
+- 使用 `echarts.graphic.LinearGradient` 实现渐变效果
+- SVG环形进度条动态显示胜率
+- Hover时3D上浮动画 `transform: translateY(-2px)`
 
-#### 后端开发
-```bash
-# 启动后端（本地）
-cd backend_api_python
-python run.py
-
-# 启动后端（Docker）
-docker-compose up -d backend
-
-# 查看后端日志
-docker-compose logs -f backend --tail 50
-
-# 进入后端容器
-docker exec -it quantdinger-backend bash
-
-# 重启后端
-docker-compose restart backend
+#### 1.2 收益日历
+```javascript
+// 日历数据结构
+calendar_months: [
+  {
+    year: 2026,
+    month: 1,
+    days_in_month: 31,
+    first_weekday: 2,  // 0=周一, 6=周日
+    days: {
+      '01': 1250.50,  // 每日盈亏
+      '02': -340.20,
+      // ...
+    },
+    total: 15000.00,
+    win_days: 18,
+    lose_days: 8
+  }
+]
 ```
 
-#### 前端开发
-```bash
-# 安装依赖
-cd quantdinger_vue
-npm install
+**实现要点**:
+- CSS Grid布局 7列日历网格
+- 根据盈亏值动态计算背景色渐变
+- 支持月份切换，查看历史数据
 
-# 启动开发服务器
-npm run serve
-
-# 构建生产版本
-npm run build
-
-# 代码检查
-npm run lint
+#### 1.3 策略分布饼图
+```javascript
+// ECharts配置要点
+series: [{
+  type: 'pie',
+  radius: ['50%', '75%'],  // 环形图
+  itemStyle: {
+    borderRadius: 6,
+    borderWidth: 3
+  },
+  label: { show: false },  // 隐藏标签
+  emphasis: {
+    label: { show: true }  // hover时显示
+  }
+}]
 ```
 
-#### 数据库管理
-```bash
-# SQLite 数据库位置
-backend_api_python/data/quantdinger.db
+#### 1.4 回撤曲线
+```javascript
+// 计算逻辑
+values = daily_pnl_chart.map(d => d.profit)
+cumulative = values.reduce((acc, v) => {
+  acc.push((acc[acc.length-1] || 0) + v)
+  return acc
+}, [])
 
-# 查看数据库表
-sqlite3 backend_api_python/data/quantdinger.db ".tables"
-
-# 查看特定表结构
-sqlite3 backend_api_python/data/quantdinger.db ".schema qd_strategies_trading"
-
-# 查询数据
-sqlite3 backend_api_python/data/quantdinger.db "SELECT * FROM qd_strategies_trading WHERE status='running';"
+peak = Math.max(...cumulative)
+drawdown = cumulative.map(v => v - peak)  // 距离峰值的回撤
 ```
 
-#### HAMA 监控相关
-```bash
-# 初始化 HAMA 数据库表
-cd backend_api_python
-python init_all_tables.py
+**技术亮点**:
+- 使用 `echarts.graphic.LinearGradient` 实现面积图渐变
+- `markPoint` 标记最大回撤点
+- 动态Y轴刻度格式化
 
-# 启动自动监控（本地）
-python auto_hama_monitor_mysql.py
+#### 1.5 订单声音提醒
+```javascript
+// Web Audio API实现
+playOrderBeep() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  const ctx = new AudioCtx()
 
-# 或使用启动脚本
-start_hama_monitor.bat
+  const playTone = (startTime, freq) => {
+    const oscillator = ctx.createOscillator()
+    const gainNode = ctx.createGain()
 
-# 测试单个币种监控
-python test_hama_simple.py
+    oscillator.frequency.value = freq
+    gainNode.gain.value = 0.08
+
+    oscillator.connect(gainNode)
+    gainNode.connect(ctx.destination)
+
+    oscillator.start(startTime)
+    oscillator.stop(startTime + 0.12)
+  }
+
+  playTone(now, 880)      // 第一声
+  playTone(now + 0.18, 1100)  // 第二声更高
+}
 ```
 
-### 数据库结构
+**实现逻辑**:
+1. 轮询 `/api/dashboard/pendingOrders` 每5秒
+2. 比较 `lastOrderId` 检测新订单
+3. 发现新订单时播放双音提示音
+4. 显示通知并刷新订单列表
 
-#### 核心业务表
-- `qd_strategies_trading` - 交易策略配置
-- `qd_indicator_codes` - 自定义指标代码（Python）
-- `qd_backtest_results` - 回测结果
-- `qd_exchange_credentials` - 交易所 API 密钥（加密存储）
-- `hama_monitor_cache` - HAMA 监控缓存（新增）
-- `hama_monitor_history` - HAMA 监控历史（新增）
-
-#### AI 代理记忆表
-位置: `backend_api_python/data/memory/*.db`
-- 每个代理独立的 SQLite 数据库
-- 存储：历史决策、分析结果、学习记录
-
-### 技术栈
-
-- **前端**: Vue 2.6.14 + Ant Design Vue + KlineCharts/ECharts
-- **后端**: Python 3.10+ + Flask 2.3.3 + SQLAlchemy 2.0
-- **数据库**: SQLite (本地文件) / MySQL (可选)
-- **部署**: Docker Compose (推荐) 或本地开发
-
-### 目录结构
-```
-QuantDinger/
-├── backend_api_python/          # Python Flask 后端
-│   ├── app/
-│   │   ├── routes/              # API 路由 (14个模块)
-│   │   ├── services/            # 核心业务逻辑
-│   │   │   ├── agents/          # AI 多代理系统
-│   │   │   ├── live_trading/    # 实时交易执行
-│   │   │   ├── analysis.py      # 市场分析服务
-│   │   │   ├── backtest.py      # 回测引擎
-│   │   │   ├── strategy.py      # 策略管理
-│   │   │   └── llm.py           # LLM 接口
-│   │   ├── data_sources/        # 统一数据源接口
-│   │   ├── config/              # 配置管理
-│   │   └── utils/               # 工具函数
-│   ├── data/                    # 数据存储目录
-│   ├── logs/                    # 日志目录
-│   ├── run.py                   # 后端启动入口
-│   ├── requirements.txt         # Python 依赖
-│   └── env.example              # 环境变量模板
-├── quantdinger_vue/             # Vue 2 前端
-│   ├── src/
-│   │   ├── views/               # 页面组件
-│   │   ├── api/                 # API 封装
-│   │   ├── components/          # 公共组件
-│   │   ├── store/               # Vuex 状态管理
-│   │   ├── router/              # 路由配置
-│   │   └── locales/             # 国际化 (10种语言)
-│   ├── vue.config.js            # 前端配置 (开发代理到后端 5000)
-│   └── package.json             # Node 依赖
-└── docker-compose.yml           # Docker 部署配置
+### 状态管理方式
+```javascript
+// Vuex状态
+computed: {
+  ...mapState({
+    navTheme: state => state.app.theme  // 主题模式
+  }),
+  isDarkTheme() {
+    return this.navTheme === 'dark' || this.navTheme === 'realdark'
+  }
+}
 ```
 
-## 核心架构模式
+### 实现要点和技术亮点
 
-### 1. AI 多代理系统
+1. **响应式图表**
+   - 使用 `window.addEventListener('resize')` 监听窗口大小变化
+   - 调用 `chart.resize()` 自适应容器大小
 
-项目核心是三阶段多代理协作系统：
+2. **暗黑主题支持**
+   - 通过 `isDarkTheme` computed属性判断
+   - 动态切换ECharts配置的颜色变量
+   - CSS变量实现主题切换
 
-**阶段 1 - 并行分析 (5个代理)**:
-- `MarketAnalyst`: 技术面分析 (价格、成交量、技术指标)
-- `FundamentalAnalyst`: 基本面分析 (估值、财报)
-- `NewsAnalyst`: 新闻和事件分析
-- `SentimentAnalyst`: 市场情绪分析
-- `RiskAnalyst`: 风险评估
+3. **性能优化**
+   - 使用 `$nextTick` 确保DOM渲染完成后再初始化图表
+   - 组件销毁时 `chart.dispose()` 释放资源
 
-**阶段 2 - 辩论 (2个代理)**:
-- `BullResearcher`: 牛市观点论证
-- `BearResearcher`: 熊市观点论证
+4. **国际化**
+   - 使用 `this.$t('dashboard.xxx')` 实现多语言
+   - 支持中英文切换
 
-**阶段 3 - 决策 (1个代理)**:
-- `TraderAgent`: 综合所有分析，给出最终建议 (BUY/SELL/HOLD)
+---
 
-代理文件位置: [backend_api_python/app/services/agents/](backend_api_python/app/services/agents/)
-- [coordinator.py](backend_api_python/app/services/agents/coordinator.py): 代理编排器
-- [analyst_agents.py](backend_api_python/app/services/agents/analyst_agents.py): 分析代理
-- [researcher_agents.py](backend_api_python/app/services/agents/researcher_agents.py): 研究代理
-- [trader_agent.py](backend_api_python/app/services/agents/trader_agent.py): 决策代理
+## 2. HAMA Market (HAMA行情监控)
 
-### 2. 本地记忆增强 (RAG + Reflection)
+### 页面功能概述
+实时监控HAMA技术指标的行情页面：
+- 显示币种总数、上涨/下跌趋势统计
+- 行情列表展示（价格、HAMA状态、蜡烛/MA、布林带状态等）
+- 支持手动刷新和自动刷新（每2分钟）
+- 提供TradingView快捷链接
 
-每个代理都有独立的 SQLite 记忆存储 ([data/memory/](backend_api_python/data/memory/))，支持：
-- **检索**: 基于相似度和时间衰减的历史经验检索
-- **反思**: 自动验证历史决策并学习 (可选 Worker)
-- **注入**: 检索到的经验作为上下文注入到代理提示词
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\hama-market\index.vue`
 
-关键文件:
-- [memory.py](backend_api_python/app/services/agents/memory.py): 记忆管理
-- [reflection.py](backend_api_python/app/services/agents/reflection.py): 反思服务
-- [reflection_worker.py](backend_api_python/app/services/agents/reflection_worker.py): 后台验证 Worker
+### 核心技术栈
+- **Ant Design Vue Table** - 数据表格
+- **实时价格Mixin** - 价格自动更新
+- **Moment.js** - 时间格式化
 
-### 3. 策略生命周期
+### 数据流和API调用
 
-```
-指标开发 (Python) → 策略配置 (风险管理) → 回测 + AI 优化 → 执行
-                                    ↓
-                        实时交易 (Crypto) 或 信号通知 (Stock/Forex)
+```javascript
+// 主要API端点
+GET /api/hama-market/watchlist?market=spot
 ```
 
-关键服务:
-- [strategy.py](backend_api_python/app/services/strategy.py): 策略 CRUD 和状态管理
-- [strategy_compiler.py](backend_api_python/app/services/strategy_compiler.py): Python 指标编译
-- [backtest.py](backend_api_python/app/services/backtest.py): 回测引擎
-- [trading_executor.py](backend_api_python/app/services/trading_executor.py): 策略执行器
-- [signal_notifier.py](backend_api_python/app/services/signal_notifier.py): 信号通知 (Telegram/Email/Webhook)
-
-### 4. HAMA 指标监控与数据获取
-
-#### HAMA 数据获取方案（5种实现）
-
-系统提供 **5 种方案** 获取 HAMA 指标数据：
-
-1. **本地计算（推荐）** - [hama_calculator.py](backend_api_python/app/services/hama_calculator.py)
-   - API: `/api/hama/calculate`
-   - 速度: ~10ms
-   - 成本: 免费
-   - 准确度: 99%+
-   - 适用场景: 生产环境首选
-
-2. **OCR 识别** - [hama_ocr_extractor.py](backend_api_python/app/services/hama_ocr_extractor.py)
-   - API: `/api/hama-ocr/extract`
-   - 使用 RapidOCR（完全免费）
-   - 速度: ~2秒
-   - 准确度: 90-95%（依赖 OCR 质量）
-   - 适用场景: 日常使用推荐
-
-3. **Brave 监控（自动）** - [hama_brave_monitor.py](backend_api_python/app/services/hama_brave_monitor.py)
-   - API: `/api/hama-market/brave/status`, `/api/hama-market/brave/monitor`
-   - 使用 Playwright + RapidOCR
-   - 速度: ~60秒/次（7个币种）
-   - 存储: SQLite 数据库
-   - 适用场景: 定期验证本地计算准确性
-
-4. **GPT-4o 视觉** - [hama_vision_extractor.py](backend_api_python/app/services/hama_vision_extractor.py)
-   - 使用大模型视觉识别
-   - 成本: ~$0.0025/次
-   - 准确度: 95%+
-   - 适用场景: 高精度需求
-
-5. **Playwright** - [tradingview_playwright.py](backend_api_python/app/services/tradingview_playwright.py)
-   - 使用 playwright-stealth 绕过反爬
-   - 支持 Cookie 认证
-   - 适用场景: 调试和验证
-
-#### HAMA 监控架构
-
-**本地计算（主要）**:
-```
-前端请求
-    ↓
-后端 API (/api/hama-market/symbol)
-    ↓
-本地计算 HAMA (hama_calculator.py)
-    ↓
-返回完整数据（HAMA + 趋势 + 布林带）
-    ⚡ 2-5秒
+**响应数据结构**:
+```json
+{
+  "success": true,
+  "data": {
+    "watchlist": [
+      {
+        "symbol": "BTCUSDT",
+        "hama_brave": {
+          "hama_value": "43250.50",
+          "hama_color": "green",
+          "hama_trend": "up",
+          "candle_ma_status": "价格 > MA",
+          "bollinger_status": "expansion",
+          "last_cross_info": "金叉 ↑"
+        }
+      }
+    ]
+  }
+}
 ```
 
-**Brave 监控（验证）**:
-```
-本地自动监控脚本（auto_hama_monitor_mysql.py）
-    ↓
-每 10 分钟自动执行:
-    ├─ 启动无头浏览器（Chromium）
-    ├─ 访问 TradingView 图表（用户图表）
-    ├─ 截图 HAMA 面板
-    ├─ OCR 识别 HAMA 数据
-    └─ 保存到 SQLite 数据库
-    ↓
-前端从数据库读取
-```
+### 关键组件和交互逻辑
 
-**关键文件**:
-- [hama_calculator.py](backend_api_python/app/services/hama_calculator.py) - HAMA 本地计算
-- [hama_ocr_extractor.py](backend_api_python/app/services/hama_ocr_extractor.py) - OCR 提取器
-- [hama_brave_monitor.py](backend_api_python/app/services/hama_brave_monitor.py) - Brave 监控器（Redis 版本）
-- [hama_brave_monitor_mysql.py](backend_api_python/app/services/hama_brave_monitor_mysql.py) - Brave 监控器（MySQL 版本）
-- [auto_hama_monitor_mysql.py](backend_api_python/auto_hama_monitor_mysql.py) - 自动监控脚本（MySQL）
-- [init_all_tables.py](backend_api_python/init_all_tables.py) - 数据库初始化脚本
-
-#### TradingView 集成
-
-**涨幅榜监控** - [tradingview_scanner.py](backend_api_python/app/routes/tradingview_scanner.py)
-- 实时监控币安合约涨幅榜前100名
-- 每5分钟自动刷新数据
-- 后台 Worker 自动缓存截图到数据库
-
-**关键文件**:
-- [tradingview_scanner_service.py](backend_api_python/app/services/tradingview_scanner_service.py) - 数据获取服务
-- [gainer_tracker.py](backend_api_python/app/services/gainer_tracker.py) - 涨幅榜统计
-- [tradingview_cookies.json](backend_api_python/tradingview_cookies.json) - TradingView Cookie（用户账户）
-   - 适用场景: 验证/调试
-
-4. **GPT-4o 视觉**: [hama_vision_extractor.py](backend_api_python/app/services/hama_vision_extractor.py)
-   - 使用大模型视觉识别
-   - 成本: ~$0.0025/次
-   - 适用场景: 高精度需求
-
-5. **Pyppeteer**: [tradingview_pyppeteer.py](backend_api_python/app/services/tradingview_pyppeteer.py)
-   - 备用浏览器自动化方案
-
-### 5. 统一数据源接口
-
-支持多市场数据，通过 [data_sources/](backend_api_python/app/data_sources/) 统一接口：
-- **加密货币**: CCXT (100+ 交易所)
-- **美股**: yfinance, Finnhub, Tiingo
-- **港股/中股**: AkShare, 东方财富
-- **外汇/期货**: OANDA
-
-代理支持: `PROXY_PORT` 或 `PROXY_URL` (支持 socks5h)
-
-## 常用开发命令
-
-### Docker 部署 (推荐)
-```bash
-# 首次启动
-git clone https://github.com/brokermr810/QuantDinger.git
-cd QuantDinger
-cp backend_api_python/env.example backend_api_python/.env
-docker-compose up -d --build
-
-# 访问
-# 后端: http://localhost:5000
-# 前端: 需要单独运行 (见下方本地开发)
-
-# 常用命令
-docker-compose ps                      # 查看状态
-docker-compose logs -f backend         # 查看后端日志
-docker-compose restart backend         # 重启后端
-docker-compose down                    # 停止服务
-docker-compose exec backend bash       # 进入容器
-
-# 注意事项
-# - Redis 服务默认注释，如需启用请取消 docker-compose.yml 中的 redis 注释
-# - 前端服务默认注释，推荐使用本地开发模式运行前端
-# - 代理配置使用 host.docker.internal 访问宿主机代理
-# - 数据库路径: /app/data/quantdinger.db (容器内) = ./backend_api_python/data/quantdinger.db (宿主机)
+#### 2.1 统计卡片
+```javascript
+// 计算属性
+statistics: {
+  total: watchlist.length,
+  up: watchlist.filter(item =>
+    item.hama_brave?.hama_color === 'green'
+  ).length,
+  down: watchlist.filter(item =>
+    item.hama_brave?.hama_color === 'red'
+  ).length
+}
 ```
 
-### 本地开发
-```bash
-# 后端 (Flask API)
-cd backend_api_python
-pip install -r requirements.txt
-cp env.example .env
-python run.py                        # 启动在 http://localhost:5000
+#### 2.2 行情表格
+**列定义**:
+1. 币种 - 蓝色Tag显示
+2. 价格 - 根据数值大小动态调整小数位数
+3. HAMA状态 - 上涨(绿)/下跌(红)/盘整(灰)图标+文字
+4. 蜡烛/MA - 显示价格与均线关系
+5. 布林带状态 - 收缩(橙色)/扩张(蓝色)
+6. 最近交叉 - 金叉/死叉信息
+7. 操作 - TradingView快捷链接
 
-# 前端 (Vue UI)
-cd quantdinger_vue
-npm install
-npm run serve                        # 启动在 http://localhost:8000
-                                    # 自动代理 /api 到后端 5000
-
-# 构建
-npm run build                        # 生产构建
-npm run lint                         # 代码检查
+#### 2.3 价格格式化
+```javascript
+formatPrice(price) {
+  const numPrice = parseFloat(price)
+  if (numPrice < 0.01) return numPrice.toFixed(6)
+  if (numPrice < 1) return numPrice.toFixed(4)
+  return numPrice.toFixed(2)
+}
 ```
 
-## 关键配置文件
+### 状态管理方式
+```javascript
+// 使用Mixin复用实时价格功能
+mixins: [realtimePriceMixin]
 
-### 后端配置: [backend_api_python/.env](backend_api_python/env.example)
-
-核心配置项:
-```bash
-# 认证
-SECRET_KEY=                          # Flask session 密钥 (生产环境必须更改)
-ADMIN_USER=quantdinger
-ADMIN_PASSWORD=123456
-
-# AI/LLM (必需用于 AI 分析功能)
-OPENROUTER_API_KEY=                  # OpenRouter API 密钥
-OPENROUTER_MODEL=openai/gpt-4o       # 使用的模型
-
-# 代理设置 (网络受限时推荐)
-PROXY_PORT=7890                      # 或使用 PROXY_URL=socks5h://127.0.0.1:7890
-
-# 代理记忆 (可选)
-ENABLE_AGENT_MEMORY=true             # 启用 RAG 记忆
-ENABLE_REFLECTION_WORKER=false       # 启用自动反思验证
-
-# 数据库
-SQLITE_DATABASE_FILE=/app/data/quantdinger.db  # Docker 路径
+// Mixin提供的能力
+- sseConnected: SSE连接状态
+- getRealtimePrice(symbol): 获取实时价格
+- isPriceJustUpdated(symbol): 检查是否刚更新（闪烁效果）
+- formatPrice(symbol, fallback): 格式化价格
 ```
 
-### 前端配置: [quantdinger_vue/vue.config.js](quantdinger_vue/vue.config.js)
+### 实现要点和技术亮点
 
-开发环境自动代理 `/api` 到 `http://localhost:5000`
+1. **自动刷新**
+   ```javascript
+   mounted() {
+     this.fetchData()
+     this.timer = setInterval(() => {
+       this.fetchData()
+     }, 120000)  // 每2分钟
+   }
+   ```
 
-## API 路由结构
+2. **Mixin复用**
+   - 将实时价格相关逻辑封装为 `realtimePriceMixin`
+   - 多个页面共享相同的价格更新逻辑
+   - 避免代码重复
 
-所有 API 路由在 [backend_api_python/app/routes/](backend_api_python/app/routes/):
-- [auth.py](backend_api_python/app/routes/auth.py): 登录/登出 (`/api/user/login`, `/api/user/logout`)
-- [health.py](backend_api_python/app/routes/health.py): 健康检查 (`/api/health`)
-- [market.py](backend_api_python/app/routes/market.py): 市场数据 (行情、搜索)
-- [kline.py](backend_api_python/app/routes/kline.py): K线数据
-- [indicator.py](backend_api_python/app/routes/indicator.py): 指标管理
-- [strategy.py](backend_api_python/app/routes/strategy.py): 策略 CRUD 和控制
-- [backtest.py](backend_api_python/app/routes/backtest.py): 回测 API
-- [analysis.py](backend_api_python/app/routes/analysis.py): AI 多代理分析 (`/api/analysis/multi`)
-- [ai_chat.py](backend_api_python/app/routes/ai_chat.py): AI 聊天助手
-- [dashboard.py](backend_api_python/app/routes/dashboard.py): 仪表板数据
-- [credentials.py](backend_api_python/app/routes/credentials.py): 交易所凭证管理
-- [settings.py](backend_api_python/app/routes/settings.py): 系统设置
+3. **错误处理**
+   ```javascript
+   try {
+     const res = await getHamaWatchlist({ market: 'spot' })
+     if (res.success || res.data) {
+       this.watchlist = res.data.watchlist || []
+       this.apiConnected = true
+     }
+   } catch (error) {
+     this.$message.error(this.$t('hamaMarket.fetchFailed'))
+     this.apiConnected = false
+   }
+   ```
 
-## 数据库模式
+---
 
-SQLite 数据库默认位置: `backend_api_python/data/quantdinger.db`
+## 3. TradingView Scanner (交易视图扫描器)
 
-核心表:
-- `qd_users`: 用户表
-- `qd_indicators`: 技术指标 (Python 代码)
-- `qd_strategies_trading`: 交易策略配置
-- `qd_backtest_results`: 回测结果
-- `qd_exchange_credentials`: 交易所 API 密钥 (加密存储)
-- `qd_agent_memory_*`: 各代理的记忆表 (单独的 SQLite 数据库在 `data/memory/`)
-- `qd_reflection_records`: 反思验证记录
-- `pending_orders`: 待执行订单队列
-- `gainer_stats`: 涨幅榜币种出现次数统计
-- `hama_cache`: HAMA 指标缓存 (可选，使用 Redis)
+### 页面功能概述
+扫描涨幅榜并展示图表截图：
+- 默认币种展示（BTC、ETH）
+- 涨幅榜TOP10展示
+- 实时价格更新（SSE）
+- 图表截图懒加载（点击展开行时加载）
+- 支持手动刷新截图
 
-### 数据库访问
-```bash
-# 使用 SQLite 客户端查看
-sqlite3 backend_api_python/data/quantdinger.db
-.tables
-.schema qd_strategies_trading
-SELECT * FROM qd_strategies_trading;
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\tradingview-scanner\index.vue`
 
-# Docker 容器内
-docker-compose exec backend sqlite3 /app/data/quantdinger.db
+### 核心技术栈
+- **Ant Design Vue Table** - 可展开表格
+- **实时价格Mixin** - SSE价格订阅
+- **Base64图片** - 图表截图展示
+
+### 数据流和API调用
+
+```javascript
+// 主要API端点
+GET /api/tradingview-scanner/top-gainers?limit=10
+GET /api/tradingview-scanner/screenshot?symbol=BTCUSDT&interval=15m
 ```
 
-## 实时交易执行
-
-支持 10+ 加密货币交易所直接 API 交易:
-- [live_trading/base.py](backend_api_python/app/services/live_trading/base.py): 基类接口
-- [live_trading/binance.py](backend_api_python/app/services/live_trading/binance.py): Binance
-- [live_trading/okx.py](backend_api_python/app/services/live_trading/okx.py): OKX
-- [live_trading/bitget.py](backend_api_python/app/services/live_trading/bitget.py): Bitget
-- [live_trading/execution.py](backend_api_python/app/services/live_trading/execution.py): 执行引擎
-- [live_trading/records.py](backend_api_python/app/services/live_trading/records.py): 交易记录
-
-## 策略执行流程
-
-1. **策略启动**: [trading_executor.py](backend_api_python/app/services/trading_executor.py) 启动独立线程
-2. **Tick 循环**: 每个 `STRATEGY_TICK_INTERVAL_SEC` (默认 10s) 执行一次:
-   - 获取当前价格 (带缓存)
-   - 运行用户 Python 指标代码
-   - 检查触发条件
-   - 发送订单到 `pending_orders` 表
-3. **订单执行**: [pending_order_worker.py](backend_api_python/app/services/pending_order_worker.py) 后台 Worker:
-   - 轮询 `pending_orders`
-   - 根据模式执行:
-     - **live**: 调用交易所 API (Crypto)
-     - **signal**: 发送通知 (Telegram/Email/Webhook)
-4. **状态恢复**: 重启后自动恢复 `status='running'` 的策略
-
-## 国际化 (i18n)
-
-前端支持 10 种语言，文件在 [quantdinger_vue/src/locales/](quantdinger_vue/src/locales/):
-- 简体中文、繁体中文、英语、日语、韩语、德语、法语、泰语、越南语、阿拉伯语
-
-TradingView 行情页面配置:
-- **默认币种区块**: BTCUSDT、ETHUSDT (固定显示在顶部，蓝色标签，★排名)
-- **涨幅榜区块**: 涨幅前10币种 (绿色标签，正常排名)
-- **截图缓存**: 自动缓存到 Redis，TTL 600秒 (10分钟)
-
-## 开发原则
-
-1. **本地优先**: 所有数据存储在本地，API 密钥不上传
-2. **隐私保护**: 不收集用户数据，不使用云端追踪
-3. **透明性**: 算法和策略逻辑可审计
-4. **模块化**: 清晰的关注点分离 (routes/services/data_sources)
-5. **代理可扩展**: 新增代理继承 [base_agent.py](backend_api_python/app/services/agents/base_agent.py)
-
-## 关键文件引用
-
-### 后端核心
-- [run.py](backend_api_python/run.py): 后端入口 (处理 .env 加载、代理配置、UTF-8)
-- [app/__init__.py](backend_api_python/app/__init__.py): Flask 应用工厂
-- [app/config/settings.py](backend_api_python/app/config/settings.py): 配置类
-
-### 前端核心
-- [src/main.js](quantdinger_vue/src/main.js): 前端入口
-- [src/router/index.js](quantdinger_vue/src/router/index.js): 路由配置
-- [src/store/](quantdinger_vue/src/store/): Vuex 状态管理
-- [src/api/](quantdinger_vue/src/api/): API 客户端封装
-
-### 文档
-- [README.md](README.md): 项目介绍和快速开始
-- [docs/STRATEGY_DEV_GUIDE.md](docs/STRATEGY_DEV_GUIDE.md): 策略开发指南
-
-## 常见任务
-
-### 添加新的交易所
-1. 在 [live_trading/](backend_api_python/app/services/live_trading/) 创建新文件继承 `BaseExchange`
-2. 实现必需方法: `create_order`, `cancel_order`, `get_balance`, `get_position`
-3. 在 [factory.py](backend_api_python/app/services/live_trading/factory.py) 注册
-4. 更新前端交易所列表
-
-### 添加新的 AI 代理
-1. 在 [agents/](backend_api_python/app/services/agents/) 创建新文件
-2. 继承 `BaseAgent` (来自 [base_agent.py](backend_api_python/app/services/agents/base_agent.py))
-3. 在 [coordinator.py](backend_api_python/app/services/agents/coordinator.py) 注册代理
-4. 在 [memory.py](backend_api_python/app/services/agents/memory.py) 添加记忆表
-
-### 调试代理流程
-- 查看 [backend_api_python/logs/](backend_api_python/logs/) 日志文件
-- 检查 `data/memory/*.db` 中的代理记忆
-- 使用 SQLite 客户端查看 `quantdinger.db` 中的分析结果
-
-## 测试
-
-当前项目未包含自动化测试。手动测试流程:
-1. 启动后端和前端
-2. 登录 (默认: quantdinger/123456)
-3. 创建指标并测试可视化
-4. 配置策略并运行回测
-5. 启用 AI 代理分析 (需 OPENROUTER_API_KEY)
-6. (谨慎) 在测试网启动实时交易
-
-### 测试 TradingView Scanner
-1. 访问 http://localhost:8000/#/tradingview-scanner
-2. 查看默认币种 (BTCUSDT, ETHUSDT)
-3. 查看涨幅榜前10
-4. 点击展开行查看截图
-
-### 测试 HAMA 指标
-```bash
-# 本地计算 (推荐)
-curl -X POST http://localhost:5000/api/hama/calculate \
-  -H "Content-Type: application/json" \
-  -d '{"symbol": "BTCUSDT", "ohlcv": [[...], ...]}'
-
-# OCR 识别 (免费)
-curl -X POST http://localhost:5000/api/hama-ocr/extract \
-  -H "Content-Type: application/json" \
-  -d '{"chart_url": "https://cn.tradingview.com/chart/xxx/", "symbol": "ETHUSD", "interval": "15"}'
-
-# 获取图表截图
-curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m"
+**涨幅榜数据结构**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "symbol": "SOLUSDT",
+      "price": 98.45,
+      "change_percentage": 15.32,
+      "volume": 1250000000
+    }
+  ]
+}
 ```
 
-## 部署注意事项
-
-- 生产环境必须更改 `SECRET_KEY` 和默认密码
-- 配置 HTTPS (使用反向代理如 Caddy/Nginx)
-- 设置适当的资源限制 (CPU/内存)
-- 定期备份 `data/quantdinger.db` 和 `.env` 文件
-- 监控日志文件大小，配置日志轮转
-- 确保代理配置正确 (如果使用代理)
-- Redis 可选但推荐用于生产环境
-
-## 重要提醒
-
-### TradingView Cookie 管理
-如果需要访问 TradingView 高级功能或受保护的内容，需要更新 Cookie：
-- Cookie 存储位置: 后端配置或环境变量
-- 更新频率: Cookie 过期后需手动更新
-- 获取方式: 浏览器开发者工具 → Network → 复制 Cookie 值
-
-### Windows 环境特殊说明
-```bash
-# PowerShell 启动服务
-.\restart_services.ps1
-
-# 或使用批处理
-.\restart_services.bat
+**截图数据结构**:
+```json
+{
+  "success": true,
+  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA..."  // Base64编码的PNG图片
+}
 ```
 
-## 截图缓存系统详细说明
+### 关键组件和交互逻辑
 
-### 架构
-- 后台 Worker: 服务启动时自动启动
-- 缓存范围: 涨幅榜前10个币种
-- 刷新周期: 每10分钟
-- TTL: 600秒 (10分钟)
-- 图表周期: 15分钟
-- URL 格式: TradingView Widget Embed (不需要登录)
-
-### API 使用
-```bash
-# 获取截图 (优先从缓存)
-curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m"
-
-# 强制刷新 (忽略缓存)
-curl "http://localhost:5000/api/tradingview-scanner/chart-screenshot?symbol=BTCUSDT&interval=15m&force_refresh=true"
+#### 3.1 可展开表格
+```vue
+<a-table
+  :expandedRowKeys="expandedRowKeys"
+  @expand="handleTableExpand"
+>
+  <template slot="expandedRowRender" slot-scope="record">
+    <!-- 截图内容 -->
+  </template>
+</a-table>
 ```
 
-### 前端展示
-- TradingView Scanner 页面: http://localhost:8000/#/tradingview-scanner
-- 默认币种区块: BTCUSDT, ETHUSDT (固定在顶部)
-- 涨幅榜区块: 动态显示涨幅前10
-- 点击展开行显示截图
+**展开逻辑**:
+```javascript
+async handleTableExpand(expanded, record) {
+  if (expanded) {
+    // 展开时加载截图
+    this.expandedRowKeys = [record.symbol]
+    await this.loadScreenshot(record)
+  } else {
+    // 收起时清空
+    this.expandedRowKeys = []
+  }
+}
+```
 
-### 配置修改
-修改 [tradingview_scanner.py](backend_api_python/app/routes/tradingview_scanner.py):
-- 第 240 行: `get_top_gainers(limit=10)` - 修改缓存数量
-- 第 117 行: `_SCREENSHOT_CACHE_TTL = 600` - 修改 TTL
-- `interval_mapping`: 修改时间周期映射 (15m->15, 1h->60, 1d->D 等)
+#### 3.2 截图懒加载
+```javascript
+async loadScreenshot(record) {
+  // 避免重复加载
+  if (record.screenshotData) return
+
+  this.$set(record, 'screenshotLoading', true)
+
+  try {
+    const res = await getChartScreenshot({
+      symbol: record.symbol,
+      interval: '15m'
+    })
+
+    if (res.success && res.image_base64) {
+      this.$set(record, 'screenshotData', res.image_base64)
+    }
+  } finally {
+    this.$set(record, 'screenshotLoading', false)
+  }
+}
+```
+
+#### 3.3 排名徽章
+```less
+.rank-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+
+  &.rank-1 {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
+  }
+
+  &.rank-2 {
+    background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+  }
+
+  &.rank-3 {
+    background: linear-gradient(135deg, #cd7f32, #e5a158);
+  }
+}
+```
+
+### 状态管理方式
+
+使用 `realtimePriceMixin` 提供的能力：
+```javascript
+mixins: [realtimePriceMixin]
+
+// Mixin提供的实时价格数据
+this.realtimePrices = {
+  'BTCUSDT': { price: 43250, change24h: 2.5, timestamp: '2026-01-20...' },
+  'ETHUSDT': { price: 2250, change24h: 1.8, timestamp: '2026-01-20...' }
+}
+```
+
+### 实现要点和技术亮点
+
+1. **截图缓存**
+   - 使用 `record.screenshotData` 存储已加载的截图
+   - 展开已加载的行时直接从缓存读取
+
+2. **价格闪烁效果**
+   ```javascript
+   :class="{ 'price-flash': isPriceJustUpdated(record.symbol) }"
+
+   @keyframes priceFlash {
+     0% { background-color: transparent; }
+     50% { background-color: rgba(24, 144, 255, 0.2); }
+     100% { background-color: transparent; }
+   }
+   ```
+
+3. **涨跌幅样式**
+   ```javascript
+   getRealtimeChangeClass(symbol, change) {
+     const rtChange = this.getRealtimeChange(symbol)
+     const value = rtChange !== null ? rtChange : change
+
+     if (value > 0) return 'change-up'      // 绿色
+     if (value < 0) return 'change-down'    // 红色
+     return 'change-neutral'                // 灰色
+   }
+   ```
+
+4. **自动刷新**
+   ```javascript
+   mounted() {
+     this.fetchData()
+     this.timer = setInterval(() => {
+       this.fetchData()
+     }, 300000)  // 每5分钟
+   }
+   ```
+
+---
+
+## 4. Smart Monitor (智能监控)
+
+### 页面功能概述
+智能监控中心，整合涨幅榜监控和HAMA信号检测：
+- 监控服务启停控制
+- 涨幅榜TOP20展示
+- 监控币种列表管理
+- HAMA信号历史记录
+- 支持添加涨幅榜币种到监控
+- 配置监控参数（检查间隔、信号冷却时间）
+
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\smart-monitor\index.vue`
+
+### 核心技术栈
+- **Ant Design Vue** - UI组件
+- **Tabs组件** - 三个标签页（涨幅榜/监控币种/信号历史）
+- **Moment.js** - 时间格式化
+
+### 数据流和API调用
+
+```javascript
+// 主要API端点
+GET /api/hama-monitor/status          // 获取监控状态
+POST /api/hama-monitor/start          // 启动监控
+POST /api/hama-monitor/stop           // 停止监控
+GET /api/hama-monitor/symbols         // 获取监控币种列表
+POST /api/hama-monitor/symbols/add    // 添加币种
+POST /api/hama-monitor/symbols/remove // 移除币种
+POST /api/hama-monitor/top-gainers    // 添加涨幅榜TOP20
+GET /api/hama-monitor/signals         // 获取信号历史
+POST /api/hama-monitor/signals/clear  // 清空信号
+GET /api/hama-monitor/config          // 获取配置
+POST /api/hama-monitor/config         // 更新配置
+GET /api/multi-exchange/gainers       // 获取涨幅榜数据
+```
+
+### 关键组件和交互逻辑
+
+#### 4.1 监控状态卡片
+```vue
+<a-statistic
+  title="监控币种"
+  :value="monitorStatus.symbol_count"
+  suffix="个"
+  prefix="📊"
+/>
+```
+
+**状态指标**:
+- 监控币种数量
+- 信号总数
+- 检查间隔（秒）
+- 冷却时间（秒）
+
+#### 4.2 标签页切换
+```vue
+<a-tabs v-model="activeTab">
+  <a-tab-pane key="gainers" tab="📈 涨幅榜TOP20">
+    <!-- 涨幅榜内容 -->
+  </a-tab-pane>
+
+  <a-tab-pane key="monitored" tab="📊 监控币种列表">
+    <!-- 监控列表 -->
+  </a-tab-pane>
+
+  <a-tab-pane key="signals" tab="🔔 信号历史">
+    <!-- 信号记录 -->
+  </a-tab-pane>
+</a-tabs>
+```
+
+#### 4.3 批量添加涨幅榜
+```javascript
+async handleAddAllGainers() {
+  this.loading.addAllGainers = true
+  let addedCount = 0
+
+  for (const gainer of this.gainers) {
+    if (!this.monitoredSymbols.includes(gainer.symbol)) {
+      await addSymbol({
+        symbol: gainer.symbol,
+        market_type: 'futures'
+      })
+      addedCount++
+    }
+  }
+
+  this.$message.success(`已添加 ${addedCount} 个币种`)
+  await this.fetchMonitoredSymbols()
+}
+```
+
+#### 4.4 监控配置
+```javascript
+configForm: {
+  check_interval: 60,        // 检查间隔（秒）
+  signal_cooldown: 300,      // 信号冷却（秒）
+  auto_fetch_gainers: false, // 自动获取涨幅榜
+  auto_fetch_interval: 180   // 自动获取间隔
+}
+```
+
+### 状态管理方式
+```javascript
+data() {
+  return {
+    activeTab: 'gainers',
+    monitorStatus: {
+      running: false,
+      symbol_count: 0,
+      total_signals: 0,
+      check_interval: 60,
+      signal_cooldown: 300
+    },
+    gainers: [],          // 涨幅榜数据
+    monitoredSymbols: [], // 监控币种列表
+    signals: []           // 信号历史
+  }
+}
+```
+
+### 实现要点和技术亮点
+
+1. **HAMA信号合并**
+   ```javascript
+   // 将监控列表中的HAMA信号合并到涨幅榜
+   this.gainers.forEach(gainer => {
+     const monitored = this.monitoredSymbolsData.find(
+       m => m.symbol === gainer.symbol
+     )
+     if (monitored && monitored.last_signal) {
+       gainer.hama_signal = monitored.last_signal
+     }
+   })
+   ```
+
+2. **市场类型固定**
+   ```javascript
+   // 固定使用永续合约市场
+   market_type: 'futures'
+
+   const res = await getBinanceGainers({
+     market: 'futures',
+     limit: 20
+   })
+   ```
+
+3. **排名颜色**
+   ```javascript
+   getRankColor(rank) {
+     if (rank === 1) return 'gold'   // 第一名金色
+     if (rank === 2) return 'silver' // 第二名银色
+     if (rank === 3) return '#cd7f32' // 第三名铜色
+     return 'default'
+   }
+   ```
+
+4. **信号类型标签**
+   ```vue
+   <a-tag v-if="text === 'UP'" color="green">📈 涨信号</a-tag>
+   <a-tag v-else-if="text === 'DOWN'" color="red">📉 跌信号</a-tag>
+   <a-tag v-else color="default">观望</a-tag>
+   ```
+
+---
+
+## 5. Indicator Analysis (指标分析)
+
+### 页面功能概述
+技术指标分析和回测平台：
+- 币种搜索和选择
+- TradingView图表集成
+- HAMA指标图表展示
+- K线图表显示
+- 指标参数配置
+- 回测功能
+- 回测历史记录
+
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\indicator-analysis\index.vue`
+
+**注意**: 该文件较大（99.4KB），包含复杂的图表集成逻辑，建议分模块维护。
+
+### 核心技术栈
+- **TradingView Widget** - TradingView图表组件
+- **Lightweight Charts** - 轻量级K线图
+- **HAMA Chart组件** - 自定义HAMA指标图
+- **KlineCharts** - K线图表库
+
+### 数据流和API调用
+
+```javascript
+// 主要API端点
+GET /api/indicator/symbols      // 获取币种列表
+GET /api/indicator/hama-data    // 获取HAMA数据
+POST /api/indicator/backtest    // 执行回测
+GET /api/indicator/backtest-history  // 获取回测历史
+```
+
+### 关键组件和交互逻辑
+
+#### 5.1 币种搜索
+```vue
+<a-select
+  v-model="searchSymbol"
+  show-search
+  :filter-option="filterSymbolOption"
+  @search="handleSymbolSearch"
+  @change="handleSymbolSelect"
+>
+  <a-select-option
+    v-for="item in symbolSuggestions"
+    :key="item.value"
+    :value="item.value"
+  >
+    <a-tag :color="getMarketColor(item.market)">
+      {{ getMarketName(item.market) }}
+    </a-tag>
+    <span class="symbol-name">{{ item.symbol }}</span>
+  </a-select-option>
+</a-select>
+```
+
+#### 5.2 图表切换
+```vue
+<a-radio-group v-model="chartType" button-style="solid">
+  <a-radio-button value="tradingview">TradingView</a-radio-button>
+  <a-radio-button value="hama">HAMA Chart</a-radio-button>
+  <a-radio-button value="kline">K线图</a-radio-button>
+</a-radio-group>
+```
+
+#### 5.3 回测功能
+```javascript
+// 回测参数
+backtestParams: {
+  symbol: 'BTCUSDT',
+  interval: '15m',
+  ma_period: 100,
+  bollinger_period: 20,
+  bollinger_std: 2
+}
+
+// 执行回测
+async runBacktest() {
+  const res = await this.$api.post('/api/indicator/backtest', this.backtestParams)
+  if (res.success) {
+    this.backtestResult = res.data
+  }
+}
+```
+
+### 实现要点和技术亮点
+
+1. **多图表库集成**
+   - 根据用户选择动态切换图表组件
+   - 使用 `v-if` / `v-else` 控制图表显示
+   - 组件销毁时释放图表资源
+
+2. **币种搜索优化**
+   ```javascript
+   filterSymbolOption(input, option) {
+     const symbol = option.componentOptions.propsData.symbol
+     return symbol.toLowerCase().includes(input.toLowerCase())
+   }
+   ```
+
+3. **响应式布局**
+   - 使用 `grid` 和 `flex` 布局
+   - 支持暗黑主题切换
+
+---
+
+## 6. Trading Assistant (交易助手)
+
+### 页面功能概述
+AI交易决策辅助平台：
+- AI决策记录展示
+- 持仓记录管理
+- 交易记录查询
+- 多标签页组织内容
+
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\trading-assistant\index.vue`
+
+### 核心技术栈
+- **Ant Design Vue Tabs** - 多标签页
+- **Table组件** - 数据表格
+- **Moment.js** - 时间格式化
+
+### 数据流和API调用
+
+```javascript
+// 主要API端点
+GET /api/trading-assistant/ai-decisions    // AI决策记录
+GET /api/trading-assistant/positions       // 持仓记录
+GET /api/trading-assistant/trades          // 交易记录
+```
+
+### 关键组件和交互逻辑
+
+#### 6.1 三个子组件
+```vue
+<template>
+  <a-tabs>
+    <a-tab-pane key="decisions">
+      <ai-decision-records />
+    </a-tab-pane>
+
+    <a-tab-pane key="positions">
+      <position-records />
+    </a-tab-pane>
+
+    <a-tab-pane key="trades">
+      <trading-records />
+    </a-tab-pane>
+  </a-tabs>
+</template>
+```
+
+**组件文件位置**:
+- `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\trading-assistant\components\AIDecisionRecords.vue`
+- `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\trading-assistant\components\PositionRecords.vue`
+- `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\trading-assistant\components\TradingRecords.vue`
+
+### 实现要点和技术亮点
+
+1. **组件化设计**
+   - 将不同功能拆分为独立组件
+   - 每个组件负责单一职责
+   - 便于维护和测试
+
+2. **标签页缓存**
+   ```javascript
+   // router.config.js
+   meta: {
+     keepAlive: true  // 缓存页面状态
+   }
+   ```
+
+---
+
+## 7. Settings (设置)
+
+### 页面功能概述
+系统配置管理：
+- 动态配置表单（根据Schema生成）
+- 支持多种输入类型（文本、密码、数字、布尔、下拉选择）
+- 交易所凭证管理
+- 配置分组折叠展示
+- 保存后重启提示
+
+**文件位置**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\settings\index.vue`
+
+**子组件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\views\settings\components\ExchangeCredentials.vue`
+
+### 核心技术栈
+- **Ant Design Vue Form** - 表单组件
+- **Collapse组件** - 折叠面板
+- **动态表单生成** - 根据Schema生成表单
+
+### 数据流和API调用
+
+```javascript
+// 主要API端点
+GET /api/settings/schema    // 获取配置Schema
+GET /api/settings/values    // 获取配置值
+POST /api/settings/save     // 保存配置
+```
+
+**Schema结构**:
+```json
+{
+  "code": 1,
+  "data": {
+    "ai": {
+      "title": "AI设置",
+      "items": [
+        {
+          "key": "openai_api_key",
+          "label": "OpenAI API Key",
+          "type": "password",
+          "default": "",
+          "link": "https://platform.openai.com/api-keys",
+          "link_text": "settings.link.getApiKey"
+        }
+      ]
+    },
+    "data_source": {
+      "title": "数据源设置",
+      "items": [...]
+    }
+  }
+}
+```
+
+### 关键组件和交互逻辑
+
+#### 7.1 动态表单生成
+```vue
+<a-collapse v-model="activeKey">
+  <a-collapse-panel v-for="(group, groupKey) in schema" :key="groupKey">
+    <a-form :form="form">
+      <a-form-item
+        v-for="item in group.items"
+        :key="item.key"
+      >
+        <!-- 文本输入 -->
+        <template v-if="item.type === 'text'">
+          <a-input
+            v-decorator="[item.key, {
+              initialValue: getFieldValue(groupKey, item.key)
+            }]"
+          />
+        </template>
+
+        <!-- 密码输入 -->
+        <template v-else-if="item.type === 'password'">
+          <a-input
+            :type="passwordVisible[item.key] ? 'text' : 'password'"
+          >
+            <a-icon
+              slot="suffix"
+              :type="passwordVisible[item.key] ? 'eye' : 'eye-invisible'"
+              @click="togglePasswordVisible(item.key)"
+            />
+          </a-input>
+        </template>
+
+        <!-- 数字输入 -->
+        <template v-else-if="item.type === 'number'">
+          <a-input-number
+            v-decorator="[item.key, {
+              initialValue: getNumberValue(groupKey, item.key, item.default)
+            }]"
+          />
+        </template>
+
+        <!-- 布尔开关 -->
+        <template v-else-if="item.type === 'boolean'">
+          <a-switch
+            v-decorator="[item.key, {
+              valuePropName: 'checked',
+              initialValue: getBoolValue(groupKey, item.key, item.default)
+            }]"
+          />
+        </template>
+
+        <!-- 下拉选择 -->
+        <template v-else-if="item.type === 'select'">
+          <a-select
+            v-decorator="[item.key, {
+              initialValue: getFieldValue(groupKey, item.key) || item.default
+            }]"
+          >
+            <a-select-option v-for="opt in item.options" :key="opt">
+              {{ opt }}
+            </a-select-option>
+          </a-select>
+        </template>
+      </a-form-item>
+    </a-form>
+  </a-collapse-panel>
+</a-collapse>
+```
+
+#### 7.2 配置保存
+```javascript
+async handleSave() {
+  this.form.validateFields(async (err, formValues) => {
+    if (err) return
+
+    // 按组整理数据
+    const data = {}
+    for (const groupKey of Object.keys(this.schema)) {
+      data[groupKey] = {}
+      const group = this.schema[groupKey]
+
+      for (const item of group.items) {
+        if (item.key in formValues) {
+          let value = formValues[item.key]
+
+          // 布尔值转字符串
+          if (item.type === 'boolean') {
+            value = value ? 'True' : 'False'
+          }
+
+          data[groupKey][item.key] = value
+        }
+      }
+    }
+
+    const res = await saveSettings(data)
+    if (res.code === 1) {
+      this.$message.success(res.msg)
+
+      // 显示重启提示
+      if (res.data?.requires_restart) {
+        this.showRestartTip = true
+      }
+
+      // 重新加载配置
+      this.loadSettings()
+    }
+  })
+}
+```
+
+#### 7.3 密码可见性切换
+```javascript
+togglePasswordVisible(key) {
+  this.$set(this.passwordVisible, key, !this.passwordVisible[key])
+}
+```
+
+#### 7.4 重启命令复制
+```javascript
+copyRestartCommand() {
+  const cmd = 'cd backend_api_python && py run.py'
+  navigator.clipboard.writeText(cmd).then(() => {
+    this.$message.success(this.$t('settings.copySuccess'))
+  }).catch(() => {
+    this.$message.error(this.$t('settings.copyFailed'))
+  })
+}
+```
+
+### 状态管理方式
+```javascript
+mixins: [baseMixin]
+
+// baseMixin提供的能力
+- navTheme: 当前主题模式
+- isDarkTheme: 是否暗黑主题
+```
+
+### 实现要点和技术亮点
+
+1. **动态表单系统**
+   - 根据Schema自动生成表单
+   - 支持多种字段类型
+   - 字段默认值和验证规则
+
+2. **分组管理**
+   ```javascript
+   activeKeys: [
+     'ai',
+     'data_source',
+     'app',
+     'auth',
+     'exchange_credentials'
+   ]
+   ```
+
+3. **国际化支持**
+   ```javascript
+   getGroupTitle(groupKey, defaultTitle) {
+     const key = `settings.group.${groupKey}`
+     const translated = this.$t(key)
+     return translated !== key ? translated : defaultTitle
+   }
+   ```
+
+4. **类型转换处理**
+   ```javascript
+   getNumberValue(groupKey, key, defaultVal) {
+     const val = this.getFieldValue(groupKey, key)
+     if (val === '' || val === null || val === undefined) {
+       return defaultVal ? parseFloat(defaultVal) : null
+     }
+     return parseFloat(val)
+   }
+
+   getBoolValue(groupKey, key, defaultVal) {
+     const val = this.getFieldValue(groupKey, key)
+     if (val === '' || val === null || val === undefined) {
+       return defaultVal === 'True' || defaultVal === 'true' || defaultVal === true
+     }
+     return val === 'True' || val === 'true' || val === true
+   }
+   ```
+
+5. **交易所凭证管理**
+   - 独立的 `ExchangeCredentials` 组件
+   - 支持多交易所配置
+   - API密钥加密存储
+
+6. **暗黑主题适配**
+   ```less
+   &.theme-dark {
+     background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+
+     .settings-collapse {
+       /deep/ .ant-collapse-item {
+         background: #1e222d;
+
+         .ant-collapse-header {
+           background: linear-gradient(135deg, #252a36 0%, #1e222d 100%);
+           color: #e0e6ed;
+         }
+       }
+     }
+   }
+   ```
+
+---
+
+## 通用技术方案
+
+### 1. 实时价格更新 (SSE)
+
+**服务文件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\utils\sse.js`
+
+**Mixin文件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\mixins\realtimePrice.js`
+
+**实现原理**:
+```javascript
+// SSE服务
+import { EventSourcePolyfill } from 'event-source-polyfill'
+
+const sseService = {
+  eventSource: null,
+  listeners: [],
+
+  connect(onPriceUpdate, onConnected, onError) {
+    this.eventSource = new EventSourcePolyfill('/api/sse/prices', {
+      headers: { 'Accept': 'text/event-stream' }
+    })
+
+    this.eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      onPriceUpdate(data)
+    }
+
+    this.eventSource.onopen = () => {
+      onConnected()
+    }
+
+    this.eventSource.onerror = (error) => {
+      onError(error)
+    }
+  },
+
+  disconnect() {
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+  }
+}
+
+export default sseService
+```
+
+**使用方式**:
+```javascript
+import realtimePriceMixin from '@/mixins/realtimePrice'
+
+export default {
+  mixins: [realtimePriceMixin],
+
+  methods: {
+    // 直接使用Mixin提供的方法
+    getRealtimePrice(symbol) {
+      return this.realtimePrices[symbol]
+    },
+
+    isPriceJustUpdated(symbol) {
+      // 显示闪烁效果
+    }
+  }
+}
+```
+
+### 2. 国际化 (i18n)
+
+**配置文件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\locales\`
+
+**使用方式**:
+```javascript
+// 模板中
+{{ $t('dashboard.totalEquity') }}
+
+// JavaScript中
+this.$t('settings.saveSuccess')
+```
+
+### 3. 主题切换
+
+**Vuex Store**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\store\modules\app.js`
+
+**使用方式**:
+```javascript
+computed: {
+  ...mapState({
+    navTheme: state => state.app.theme
+  }),
+  isDarkTheme() {
+    return this.navTheme === 'dark' || this.navTheme === 'realdark'
+  }
+}
+```
+
+**CSS适配**:
+```less
+.dashboard-pro {
+  background: @bg-light;
+
+  &.theme-dark {
+    background: @bg-dark;
+
+    .kpi-card {
+      background: @bg-card-dark;
+      border-color: @border-dark;
+    }
+  }
+}
+```
+
+### 4. 路由配置
+
+**路由文件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\config\router.config.js`
+
+**路由结构**:
+```javascript
+{
+  path: '/dashboard',
+  name: 'Dashboard',
+  component: () => import('@/views/dashboard'),
+  meta: {
+    title: 'menu.dashboard',
+    keepAlive: true,
+    icon: 'dashboard',
+    permission: ['dashboard']
+  }
+}
+```
+
+### 5. API请求封装
+
+**请求文件**: `c:\project\github\QuantDinger-1\quantdinger_vue\src\utils\request.js`
+
+**使用方式**:
+```javascript
+import request from '@/utils/request'
+
+export function getDashboardSummary() {
+  return request({
+    url: '/api/dashboard/summary',
+    method: 'get'
+  })
+}
+```
+
+**拦截器**:
+- 请求拦截器：添加认证Token
+- 响应拦截器：统一错误处理、数据格式化
+
+### 6. 图表自适应
+
+```javascript
+mounted() {
+  this.initCharts()
+  window.addEventListener('resize', this.handleResize)
+},
+
+beforeDestroy() {
+  window.removeEventListener('resize', this.handleResize)
+  if (this.chart) {
+    this.chart.dispose()
+  }
+},
+
+methods: {
+  handleResize() {
+    if (this.chart) {
+      this.chart.resize()
+    }
+  }
+}
+```
+
+### 7. 表格分页
+
+```vue
+<a-table
+  :pagination="{
+    current: pagination.current,
+    pageSize: pagination.pageSize,
+    total: pagination.total,
+    showSizeChanger: true,
+    showTotal: (total) => `共 ${total} 条`
+  }"
+  @change="handleTableChange"
+/>
+```
+
+```javascript
+handleTableChange(pagination) {
+  this.pagination.current = pagination.current
+  this.pagination.pageSize = pagination.pageSize
+  this.fetchData()
+}
+```
+
+### 8. 加载状态管理
+
+```javascript
+data() {
+  return {
+    loading: {
+      start: false,
+      stop: false,
+      refresh: false,
+      addGainers: false
+    }
+  }
+}
+
+async handleStart() {
+  this.loading.start = true
+  try {
+    const res = await startMonitor()
+    if (res.success) {
+      this.$message.success('启动成功')
+    }
+  } finally {
+    this.loading.start = false
+  }
+}
+```
+
+### 9. 错误处理
+
+```javascript
+async fetchData() {
+  this.loading = true
+  try {
+    const res = await getDashboardSummary()
+    if (res.code === 1) {
+      this.summary = res.data
+    } else {
+      this.$message.error(res.msg || '获取数据失败')
+    }
+  } catch (error) {
+    console.error('获取数据失败:', error)
+    this.$message.error('网络错误，请稍后重试')
+  } finally {
+    this.loading = false
+  }
+}
+```
+
+### 10. 组件通信
+
+**父子组件通信**:
+```vue
+<!-- 父组件 -->
+<child-component
+  :symbol="currentSymbol"
+  @update="handleChildUpdate"
+/>
+```
+
+```javascript
+// 子组件
+this.$emit('update', { symbol: 'BTCUSDT', price: 43250 })
+```
+
+**兄弟组件通信**:
+```javascript
+// 使用Event Bus
+// bus.js
+import Vue from 'vue'
+export default new Vue()
+
+// componentA.js
+import bus from '@/utils/bus'
+bus.$emit('price-update', { symbol: 'BTCUSDT', price: 43250 })
+
+// componentB.js
+import bus from '@/utils/bus'
+bus.$on('price-update', (data) => {
+  console.log(data)
+})
+```
+
+---
+
+## 性能优化建议
+
+### 1. 懒加载
+```javascript
+// 路由懒加载
+component: () => import('@/views/dashboard')
+
+// 组件懒加载
+components: {
+  HeavyComponent: () => import('./HeavyComponent.vue')
+}
+```
+
+### 2. 防抖和节流
+```javascript
+import { debounce } from 'lodash'
+
+methods: {
+  handleSearch: debounce(function(keyword) {
+    this.fetchSuggestions(keyword)
+  }, 300)
+}
+```
+
+### 3. 虚拟滚动
+```vue
+<virtual-list
+  :size="40"
+  :remain="8"
+  :data="largeList"
+/>
+```
+
+### 4. 图表优化
+- 使用 `throttle` 限制图表更新频率
+- 避免频繁 `setOption`
+- 使用 `appendData` 增量更新数据
+
+### 5. 内存泄漏防护
+```javascript
+beforeDestroy() {
+  // 清除定时器
+  if (this.timer) {
+    clearInterval(this.timer)
+  }
+
+  // 销毁图表
+  if (this.chart) {
+    this.chart.dispose()
+  }
+
+  // 移除事件监听
+  window.removeEventListener('resize', this.handleResize)
+
+  // 断开SSE连接
+  this.disconnectSSE()
+}
+```
+
+---
+
+## 安全建议
+
+### 1. XSS防护
+```vue
+<!-- 避免使用 v-html -->
+<div>{{ userInput }}</div>
+
+<!-- 必须使用时进行过滤 -->
+<div v-html="$sanitize(userInput)"></div>
+```
+
+### 2. API密钥存储
+- 使用HTTPS传输
+- 后端加密存储
+- 前端不在localStorage明文存储
+
+### 3. 权限控制
+```javascript
+// 路由守卫
+router.beforeEach((to, from, next) => {
+  if (to.meta.permission) {
+    const hasPermission = checkPermission(to.meta.permission)
+    if (hasPermission) {
+      next()
+    } else {
+      next('/403')
+    }
+  } else {
+    next()
+  }
+})
+```
+
+---
+
+## 测试建议
+
+### 1. 单元测试
+```javascript
+// Jest测试示例
+describe('Dashboard', () => {
+  it('应该正确计算胜率', () => {
+    const performance = {
+      winning_trades: 8,
+      losing_trades: 2,
+      total_trades: 10
+    }
+
+    const winRate = (performance.winning_trades / performance.total_trades) * 100
+    expect(winRate).toBe(80)
+  })
+})
+```
+
+### 2. 组件测试
+```javascript
+import { mount } from '@vue/test-utils'
+import Dashboard from '@/views/dashboard/index.vue'
+
+describe('Dashboard', () => {
+  test('应该渲染KPI卡片', () => {
+    const wrapper = mount(Dashboard)
+    expect(wrapper.findAll('.kpi-card').length).toBe(6)
+  })
+})
+```
+
+### 3. E2E测试
+```javascript
+// Cypress测试示例
+describe('Dashboard E2E', () => {
+  it('应该显示仪表盘数据', () => {
+    cy.visit('/dashboard')
+    cy.get('.kpi-card').should('have.length', 6)
+    cy.get('.kpi-value').should('contain', '$')
+  })
+})
+```
+
+---
+
+## 总结
+
+QuantDinger前端项目采用了以下核心技术：
+
+1. **Vue 2.x** 作为核心框架，结合 **Vuex** 进行状态管理
+2. **Ant Design Vue** 提供统一的UI组件
+3. **ECharts** 实现丰富的数据可视化
+4. **SSE** 实现实时价格推送
+5. **Mixin** 复用通用逻辑
+6. **动态表单系统** 灵活配置
+7. **多主题支持** 提升用户体验
+
+各页面功能清晰，组件职责分明，便于后续维护和扩展。建议继续关注：
+- 性能优化（虚拟滚动、懒加载）
+- 代码复用（提取公共组件）
+- 测试覆盖（单元测试、E2E测试）
+- 文档完善（API文档、组件文档）
+
+---
+
+**文档版本**: 1.0
+**最后更新**: 2026-01-20
+**维护者**: Claude Sonnet 4.5
