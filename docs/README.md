@@ -56,7 +56,28 @@ Flask 2.3.3
 - **前端**: http://localhost:8000
 - **后端**: http://localhost:5000
 
-## 文档
-- 📖 [前端架构](./CLAUDE.md)
-- 🔧 [技术栈清单](./TECH_STACK.md)
-- 🤖 [Brave监控逻辑](./BRAVE_MONITOR_LOGIC.md)
+## 📚 文档导航
+
+### 快速开始
+- 🚀 [快速开始指南](./QUICKSTART.md) - 5分钟快速上手
+- 📖 [项目总览](../README.md) - 项目介绍和核心特性
+
+### 技术文档
+- 🎨 [前端架构技术文档](./CLAUDE.md) - Vue前端各页面技术实现
+- 🔧 [技术栈清单](./TECH_STACK.md) - 完整依赖和版本信息
+- 🤖 [Brave监控系统逻辑](./BRAVE_MONITOR_LOGIC.md) - 监控系统架构和实现细节
+
+### 文档目录
+- [README.md](../README.md) - 项目根目录
+- [QUICKSTART.md](./QUICKSTART.md) - 快速开始指南
+- [CLAUDE.md](./CLAUDE.md) - 前端架构文档（含7大页面详解）
+- [TECH_STACK.md](./TECH_STACK.md) - 技术栈清单
+- [BRAVE_MONITOR_LOGIC.md](./BRAVE_MONITOR_LOGIC.md) - Brave监控逻辑详解
+
+## 🔥 快速链接
+
+- [快速安装](./QUICKSTART.md#-快速安装)
+- [核心特性](../README.md#-核心特性)
+- [前端页面](./CLAUDE.md#技术栈概览)
+- [监控流程](../README.md#-监控流程)
+- [常见问题](./QUICKSTART.md#-常见问题)

@@ -4,23 +4,23 @@
 version: '3.8'
 
 services:
-  # Redis Cache Service (可选,如果本地已有 Redis 可以注释掉)
-  redis:
-    image: redis:7-alpine
-    container_name: quantdinger-redis
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-    networks:
-      - quantdinger-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # Redis Cache Service (已注释,使用宿主机Redis)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: quantdinger-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   command: redis-server --appendonly yes
+  #   networks:
+  #     - quantdinger-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # Backend API Service
   backend:

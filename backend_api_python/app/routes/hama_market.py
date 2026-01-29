@@ -213,22 +213,33 @@ def get_hama_watchlist():
                         filename = os.path.basename(screenshot_path)
                         screenshot_url = f"/screenshot/{filename}"
 
-                    # 构造返回数据（仅包含 Brave 监控数据）
+                    # 构造返回数据（包含多时间周期）
+                    hama_brave_data = {
+                        'hama_trend': brave_hama.get('hama_trend'),
+                        'hama_color': brave_hama.get('hama_color'),
+                        'hama_value': brave_hama.get('hama_value'),
+                        'candle_ma_status': brave_hama.get('candle_ma_status'),
+                        'bollinger_status': brave_hama.get('bollinger_status'),
+                        'last_cross_info': brave_hama.get('last_cross_info'),
+                        'screenshot_path': screenshot_path,
+                        'screenshot_url': screenshot_url,
+                        'screenshot_base64': brave_hama.get('screenshot_base64'),
+                        'cached_at': brave_hama.get('cached_at'),
+                        'cache_source': brave_hama.get('cache_source', 'brave_browser')
+                    }
+
+                    # 添加多时间周期数据
+                    if 'timeframe_15m' in brave_hama:
+                        hama_brave_data['timeframe_15m'] = brave_hama['timeframe_15m']
+                    if 'timeframe_1h' in brave_hama:
+                        hama_brave_data['timeframe_1h'] = brave_hama['timeframe_1h']
+                    if 'timeframe_4h' in brave_hama:
+                        hama_brave_data['timeframe_4h'] = brave_hama['timeframe_4h']
+
                     item = {
                         'symbol': symbol,
                         'price': price,
-                        'hama_brave': {
-                            'hama_trend': brave_hama.get('hama_trend'),
-                            'hama_color': brave_hama.get('hama_color'),
-                            'hama_value': brave_hama.get('hama_value'),
-                            'candle_ma_status': brave_hama.get('candle_ma_status'),  # 蜡烛/MA状态
-                            'bollinger_status': brave_hama.get('bollinger_status'),  # 布林带状态
-                            'last_cross_info': brave_hama.get('last_cross_info'),  # 最近交叉
-                            'screenshot_path': screenshot_path,  # 本地文件路径
-                            'screenshot_url': screenshot_url,  # 访问URL
-                            'cached_at': brave_hama.get('cached_at'),
-                            'cache_source': brave_hama.get('cache_source', 'brave_browser')
-                        }
+                        'hama_brave': hama_brave_data
                     }
                     watchlist.append(item)
                     logger.debug(f"{symbol} 从 Brave 监控获取到数据: {brave_hama.get('hama_color')}, 截图: {screenshot_path}")
@@ -1574,6 +1585,596 @@ def batch_enable_symbols():
 
     except Exception as e:
         logger.error(f"批量切换币种状态失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ==================== Brave 监控优化 API ====================
+
+@hama_market_bp.route('/brave/monitor-parallel', methods=['POST'])
+def trigger_brave_monitor_parallel():
+    """
+    手动触发并行 Brave 监控（性能优化版本）
+
+    参数:
+        symbols: 币种列表，逗号分隔 (可选，默认使用 DEFAULT_SYMBOLS)
+        browser_type: 浏览器类型 (brave/chrome/edge/firefox, 默认 brave)
+        max_workers: 最大并发数 (可选，默认3)
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "total": 10,
+            "success": 9,
+            "failed": 1,
+            "symbols": {...}
+        }
+    }
+    """
+    try:
+        if not BRAVE_MONITOR_ENABLED:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控未启用 (BRAVE_MONITOR_ENABLED=false)'
+            }), 400
+
+        brave_monitor = get_brave_monitor()
+
+        if not brave_monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控器未初始化'
+            }), 500
+
+        # 获取参数
+        request_data = request.get_json() or {}
+        symbols_param = request_data.get('symbols') or request.args.get('symbols')
+        browser_type = request_data.get('browser_type') or request.args.get('browser_type', 'brave')
+        max_workers = int(request_data.get('max_workers', 3))
+
+        # 确定要监控的币种列表
+        if symbols_param:
+            if isinstance(symbols_param, str):
+                symbols = [s.strip().upper() for s in symbols_param.split(',') if s.strip()]
+            else:
+                symbols = symbols_param
+        else:
+            symbols = DEFAULT_SYMBOLS
+
+        logger.info(f"手动触发并行 Brave 监控, 币种数: {len(symbols)}, 并发数: {max_workers}, 浏览器: {browser_type}")
+
+        # 执行并行批量监控
+        results = brave_monitor.monitor_batch_parallel(symbols, browser_type, max_workers)
+
+        return jsonify({
+            'success': True,
+            'data': results
+        })
+
+    except Exception as e:
+        logger.error(f"手动触发并行 Brave 监控失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/brave/warmup', methods=['POST'])
+def warmup_brave_cache():
+    """
+    缓存预热：监控热门币种
+
+    参数:
+        symbols: 热门币种列表 (可选，默认 BTC, ETH, BNB, SOL)
+        browser_type: 浏览器类型 (可选，默认 brave)
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "total": 4,
+            "success": 4,
+            "failed": 0
+        }
+    }
+    """
+    try:
+        if not BRAVE_MONITOR_ENABLED:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控未启用'
+            }), 400
+
+        brave_monitor = get_brave_monitor()
+
+        if not brave_monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控器未初始化'
+            }), 500
+
+        # 获取参数
+        request_data = request.get_json() or {}
+        hot_symbols = request_data.get('symbols')
+        browser_type = request_data.get('browser_type', 'brave')
+
+        logger.info(f"开始缓存预热，币种: {hot_symbols or '默认热门'}")
+
+        # 执行预热
+        results = brave_monitor.warmup_cache(hot_symbols, browser_type)
+
+        return jsonify({
+            'success': True,
+            'data': results
+        })
+
+    except Exception as e:
+        logger.error(f"缓存预热失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/brave/start-smart', methods=['POST'])
+def start_smart_brave_monitoring():
+    """
+    启动智能持续监控（动态调整间隔）
+
+    参数:
+        symbols: 币种列表 (可选)
+        base_interval: 基础监控间隔秒数 (可选，默认600)
+        browser_type: 浏览器类型 (可选，默认brave)
+
+    返回:
+    {
+        "success": true,
+        "message": "智能持续监控已启动",
+        "dynamic_interval": 300
+    }
+    """
+    try:
+        if not BRAVE_MONITOR_ENABLED:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控未启用'
+            }), 400
+
+        brave_monitor = get_brave_monitor()
+
+        if not brave_monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控器未初始化'
+            }), 500
+
+        # 获取参数
+        request_data = request.get_json() or {}
+        symbols = request_data.get('symbols') or DEFAULT_SYMBOLS
+        base_interval = int(request_data.get('base_interval', 600))
+        browser_type = request_data.get('browser_type', 'brave')
+
+        logger.info(f"启动智能持续监控, 币种数: {len(symbols)}, 基础间隔: {base_interval}秒")
+
+        # 获取当前动态间隔
+        dynamic_interval = brave_monitor.get_dynamic_interval()
+
+        # 启动智能监控
+        brave_monitor.start_monitoring_smart(symbols, base_interval, browser_type)
+
+        return jsonify({
+            'success': True,
+            'message': f'智能持续监控已启动 (当前动态间隔: {dynamic_interval}秒)',
+            'dynamic_interval': dynamic_interval,
+            'base_interval': base_interval
+        })
+
+    except Exception as e:
+        logger.error(f"启动智能持续监控失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/brave/health', methods=['GET'])
+def brave_health_check():
+    """
+    Brave 监控系统健康检查
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "status": "healthy",
+            "checks": {
+                "ocr_available": true,
+                "sqlite_available": true,
+                "redis_available": false,
+                "monitoring_active": true,
+                "last_monitor_time": "2026-01-20T15:30:00",
+                "cached_symbols_count": 10,
+                "monitor_interval": 300
+            }
+        }
+    }
+    """
+    try:
+        brave_monitor = get_brave_monitor()
+
+        if not brave_monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控器未初始化'
+            }), 500
+
+        # 执行健康检查
+        health_status = brave_monitor.health_check()
+
+        return jsonify({
+            'success': True,
+            'data': health_status
+        })
+
+    except Exception as e:
+        logger.error(f"健康检查失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/brave/cleanup', methods=['POST'])
+def cleanup_brave_resources():
+    """
+    清理旧资源（数据库记录和截图文件）
+
+    参数:
+        days: 保留天数 (可选，默认7)
+        cleanup_screenshots: 是否清理截图 (可选，默认true)
+        cleanup_records: 是否清理数据库记录 (可选，默认true)
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "deleted_records": 120,
+            "deleted_screenshots": 45
+        }
+    }
+    """
+    try:
+        brave_monitor = get_brave_monitor()
+
+        if not brave_monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Brave 监控器未初始化'
+            }), 500
+
+        # 获取参数
+        request_data = request.get_json() or {}
+        days = int(request_data.get('days', 7))
+        cleanup_screenshots = request_data.get('cleanup_screenshots', True)
+        cleanup_records = request_data.get('cleanup_records', True)
+
+        logger.info(f"开始清理资源，保留天数: {days}天")
+
+        deleted_records = 0
+        deleted_screenshots = 0
+
+        # 清理数据库记录
+        if cleanup_records:
+            deleted_records = brave_monitor.cleanup_old_records(days)
+
+        # 清理截图文件
+        if cleanup_screenshots:
+            deleted_screenshots = brave_monitor.cleanup_old_screenshots(days)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'deleted_records': deleted_records,
+                'deleted_screenshots': deleted_screenshots,
+                'days': days
+            },
+            'message': f'已清理 {deleted_records} 条记录和 {deleted_screenshots} 个截图（{days}天内）'
+        })
+
+    except Exception as e:
+        logger.error(f"清理资源失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/stats', methods=['GET'])
+def get_hama_stats():
+    """
+    获取 HAMA 行情统计信息
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "total": 10,
+            "up": 3,
+            "down": 5,
+            "neutral": 2,
+            "bollinger_expansion": 6,
+            "bollinger_contraction": 2,
+            "bollinger_normal": 2,
+            "last_updated": "2026-01-21 11:14:35"
+        }
+    }
+    """
+    try:
+        from app import get_hama_brave_monitor
+        brave_monitor = get_hama_brave_monitor()
+
+        if not brave_monitor:
+            try:
+                from app.services.hama_brave_monitor import get_brave_monitor as get_monitor
+                brave_monitor = get_monitor(use_sqlite=True)
+            except Exception as e:
+                logger.error(f"初始化 Brave 监控器失败: {e}")
+                brave_monitor = None
+
+        stats = {
+            'total': 0,
+            'up': 0,
+            'down': 0,
+            'neutral': 0,
+            'bollinger_expansion': 0,
+            'bollinger_contraction': 0,
+            'bollinger_normal': 0,
+            'last_updated': None
+        }
+
+        if brave_monitor:
+            # 获取所有缓存币种
+            cached_symbols = brave_monitor.get_cached_symbols()
+
+            stats['total'] = len(cached_symbols)
+
+            # 统计趋势
+            for symbol in cached_symbols:
+                hama_data = brave_monitor.get_cached_hama(symbol)
+                if hama_data:
+                    # 统计趋势
+                    hama_color = hama_data.get('hama_color', '').lower()
+                    if hama_color == 'green':
+                        stats['up'] += 1
+                    elif hama_color == 'red':
+                        stats['down'] += 1
+                    else:
+                        stats['neutral'] += 1
+
+                    # 统计布林带状态
+                    bollinger_status = hama_data.get('bollinger_status', '').lower()
+                    if bollinger_status == 'expansion':
+                        stats['bollinger_expansion'] += 1
+                    elif bollinger_status == 'squeeze':
+                        stats['bollinger_contraction'] += 1
+                    else:
+                        stats['bollinger_normal'] += 1
+
+                    # 获取最后更新时间
+                    cached_at = hama_data.get('cached_at')
+                    if cached_at and (not stats['last_updated'] or cached_at > stats['last_updated']):
+                        stats['last_updated'] = cached_at
+
+        logger.info(f"获取 HAMA 统计信息: 总计{stats['total']}, 上涨{stats['up']}, 下跌{stats['down']}, 盘整{stats['neutral']}")
+
+        return jsonify({
+            'success': True,
+            'data': stats
+        })
+
+    except Exception as e:
+        logger.error(f"获取 HAMA 统计信息失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/cached-symbols', methods=['GET'])
+def get_cached_symbols():
+    """
+    获取已缓存的币种列表
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "symbols": [
+                {
+                    "symbol": "BTCUSDT",
+                    "hama_color": "red",
+                    "hama_trend": "down",
+                    "cached_at": "2026-01-21 11:14:15",
+                    "screenshot_url": "/screenshot/hama_brave_BTCUSDT_1768965210.png"
+                }
+            ],
+            "count": 10
+        }
+    }
+    """
+    try:
+        from app import get_hama_brave_monitor
+        brave_monitor = get_hama_brave_monitor()
+
+        if not brave_monitor:
+            try:
+                from app.services.hama_brave_monitor import get_brave_monitor as get_monitor
+                brave_monitor = get_monitor(use_sqlite=True)
+            except Exception as e:
+                logger.error(f"初始化 Brave 监控器失败: {e}")
+                brave_monitor = None
+
+        symbols = []
+
+        if brave_monitor:
+            # 获取所有缓存币种
+            cached_symbols = brave_monitor.get_cached_symbols()
+
+            for symbol in cached_symbols:
+                hama_data = brave_monitor.get_cached_hama(symbol)
+                if hama_data:
+                    screenshot_path = hama_data.get('screenshot_path')
+                    screenshot_url = None
+                    if screenshot_path:
+                        filename = os.path.basename(screenshot_path)
+                        screenshot_url = f"/screenshot/{filename}"
+
+                    symbols.append({
+                        'symbol': symbol,
+                        'hama_color': hama_data.get('hama_color'),
+                        'hama_trend': hama_data.get('hama_trend'),
+                        'hama_value': hama_data.get('hama_value'),
+                        'cached_at': hama_data.get('cached_at'),
+                        'screenshot_url': screenshot_url
+                    })
+
+        logger.info(f"获取缓存币种列表: {len(symbols)} 个")
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'symbols': symbols,
+                'count': len(symbols)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取缓存币种列表失败: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@hama_market_bp.route('/history/<symbol>', methods=['GET'])
+def get_hama_history(symbol):
+    """
+    获取指定币种的HAMA监控历史记录
+
+    参数:
+        symbol: 币种符号
+        limit: 返回记录数（可选，默认50）
+        offset: 偏移量（可选，默认0）
+
+    返回:
+    {
+        "success": true,
+        "data": {
+            "symbol": "BTCUSDT",
+            "total": 120,
+            "history": [
+                {
+                    "hama_trend": "up",
+                    "hama_color": "green",
+                    "hama_value": 90150.25,
+                    "price": 90150.25,
+                    "monitored_at": "2026-01-22 10:30:00"
+                }
+            ]
+        }
+    }
+    """
+    try:
+        from app import get_hama_brave_monitor
+        brave_monitor = get_hama_brave_monitor()
+
+        if not brave_monitor:
+            try:
+                from app.services.hama_brave_monitor import get_brave_monitor as get_monitor
+                brave_monitor = get_monitor(use_sqlite=True)
+            except Exception as e:
+                logger.error(f"初始化 Brave 监控器失败: {e}")
+                brave_monitor = None
+
+        # 获取参数
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+
+        history = []
+        total = 0
+
+        if brave_monitor and brave_monitor.use_sqlite:
+            import sqlite3
+            import os
+
+            db_path = os.path.join(os.path.dirname(brave_monitor.__class__.__module__.replace('.', '/')), '..', '..', 'data', 'quantdinger.db')
+            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db'))
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 查询总记录数
+            cursor.execute('''
+                SELECT COUNT(*) as total
+                FROM hama_monitor_history
+                WHERE symbol = ?
+            ''', (symbol.upper(),))
+            total = cursor.fetchone()['total']
+
+            # 查询历史记录
+            cursor.execute('''
+                SELECT hama_trend, hama_color, hama_value, price,
+                       candle_ma_status, bollinger_status, last_cross_info,
+                       monitored_at
+                FROM hama_monitor_history
+                WHERE symbol = ?
+                ORDER BY monitored_at DESC
+                LIMIT ? OFFSET ?
+            ''', (symbol.upper(), limit, offset))
+
+            rows = cursor.fetchall()
+
+            for row in rows:
+                history.append({
+                    'hama_trend': row['hama_trend'],
+                    'hama_color': row['hama_color'],
+                    'hama_value': float(row['hama_value']) if row['hama_value'] else None,
+                    'price': float(row['price']) if row['price'] else None,
+                    'candle_ma_status': row['candle_ma_status'],
+                    'bollinger_status': row['bollinger_status'],
+                    'last_cross_info': row['last_cross_info'],
+                    'monitored_at': row['monitored_at']
+                })
+
+            conn.close()
+
+        logger.info(f"获取 {symbol} 历史记录: {len(history)} 条 (总共 {total} 条)")
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'symbol': symbol.upper(),
+                'total': total,
+                'history': history,
+                'limit': limit,
+                'offset': offset
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取历史记录失败: {e}")
         logger.error(traceback.format_exc())
         return jsonify({
             'success': False,

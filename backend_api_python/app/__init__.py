@@ -288,12 +288,8 @@ def init_hama_brave_monitor():
                     'ETHUSDT',
                     'BNBUSDT',
                     'SOLUSDT',
-                    'XRPUSDT',
-                    'ADAUSDT',
                     'DOGEUSDT',
-                    'AVAXUSDT',
-                    'DOTUSDT',
-                    'LINKUSDT'
+                    'DASHUSDT'
                 ]
 
             logger.info(f"自动启动Brave持续监控: 币种={len(symbols)}个, 间隔={interval}秒")
@@ -562,12 +558,12 @@ def create_app(config_name='default'):
         start_reflection_worker()
         restore_running_strategies()
 
-        # 7. 启动截图缓存 Worker
+        # 7. 启动截图缓存 Worker (已暂停)
         try:
-            logger.info("准备启动截图缓存 Worker...")
-            from app.routes.tradingview_scanner import start_screenshot_worker
-            start_screenshot_worker()
-            logger.info("✅ 截图缓存 Worker 已启动")
+            logger.info("⏸️  截图缓存 Worker 已禁用 (如需启用，请取消注释)")
+            # from app.routes.tradingview_scanner import start_screenshot_worker
+            # start_screenshot_worker()
+            # logger.info("✅ 截图缓存 Worker 已启动")
         except Exception as e:
             logger.error(f"❌ 启动截图缓存 Worker 失败: {e}", exc_info=True)
 

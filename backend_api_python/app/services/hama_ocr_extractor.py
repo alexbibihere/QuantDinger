@@ -15,6 +15,7 @@ import os
 import re
 import json
 import base64
+import time
 from typing import Dict, Any, Optional, List
 from app.utils.logger import get_logger
 
@@ -361,7 +362,9 @@ class HAMAOCRExtractor:
 
                 # 访问图表
                 logger.info("正在加载图表...")
-                page.goto(chart_url, timeout=120000, wait_until='load')
+                # 使用 domcontentloaded 代替 load，减少超时风险
+                # 超时时间设置为 120 秒（适应慢速网络或代理）
+                page.goto(chart_url, timeout=120000, wait_until='domcontentloaded')
 
                 # 检查是否需要登录
                 logger.info("检查登录状态...")
@@ -417,7 +420,39 @@ class HAMAOCRExtractor:
 
                 # 等待图表渲染
                 logger.info("等待图表渲染...")
-                page.wait_for_timeout(50000)
+                # 增加等待时间到 30 秒，确保 HAMA 指标完全加载
+                page.wait_for_timeout(30000)
+
+                # 检查 HAMA 指标面板是否加载
+                try:
+                    # 检查页面上是否有 HAMA 相关的文字（价格、颜色、趋势等）
+                    hama_check = page.evaluate("""
+                        () => {
+                            // 查找包含 HAMA 相关信息的元素
+                            const bodyText = document.body.innerText;
+
+                            // 检查是否包含 HAMA 指标的关键词
+                            const hasHAMA = bodyText.includes('HAMA') ||
+                                           bodyText.includes('价格') ||
+                                           bodyText.includes('颜色') ||
+                                           bodyText.includes('趋势') ||
+                                           bodyText.includes(' candles') ||
+                                           bodyText.includes(' MA');
+
+                            return {
+                                hasHAMA: hasHAMA,
+                                bodyLength: bodyText.length,
+                                preview: bodyText.substring(0, 500)
+                            };
+                        }
+                    """)
+
+                    logger.info(f"HAMA 指标检查: {hama_check['hasHAMA']}")
+                    if not hama_check['hasHAMA']:
+                        logger.warning("⚠️ 页面上未检测到 HAMA 指标面板！")
+                        logger.warning(f"页面文本预览: {hama_check['preview'][:200]}")
+                except Exception as e:
+                    logger.warning(f"检查 HAMA 指标失败: {e}")
 
                 # 截图 - 截取页面右下角 HAMA 信息面板（精确定位）
                 logger.info(f"截取图表右下角 HAMA 面板到: {output_path}")
@@ -449,6 +484,136 @@ class HAMAOCRExtractor:
 
         except Exception as e:
             logger.error(f"截取图表失败: {e}")
+            return None
+
+    def capture_full_chart(self, chart_url: str, output_path: str = '/tmp/tradingview_full_chart.png', browser_type: str = 'chromium') -> Optional[str]:
+        """截取完整的 TradingView 图表（用于邮件附件）
+
+        Args:
+            chart_url: 图表 URL
+            output_path: 输出路径
+            browser_type: 浏览器类型 (chromium, firefox, webkit, brave)
+        """
+        proxy_url = os.getenv('PROXY_URL') or os.getenv('ALL_PROXY') or os.getenv('HTTPS_PROXY')
+        proxy_config = {'server': proxy_url, 'bypass': 'localhost,127.0.0.1'} if proxy_url else None
+
+        logger.info(f"截取完整图表，代理配置: proxy_url={repr(proxy_url)}")
+
+        try:
+            with sync_playwright() as p:
+                logger.info(f"启动浏览器 ({browser_type})，访问完整图表: {chart_url}")
+
+                # 根据浏览器类型选择浏览器
+                if browser_type == 'firefox':
+                    browser = p.firefox.launch(
+                        headless=True,
+                        proxy=proxy_config if proxy_url else None
+                    )
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                elif browser_type == 'webkit':
+                    browser = p.webkit.launch(headless=True)
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                elif browser_type == 'brave':
+                    brave_path = os.path.join(os.path.dirname(__file__), '..', 'brave_profile')
+                    os.makedirs(brave_path, exist_ok=True)
+
+                    brave_exe_paths = [
+                        r'C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe',
+                        r'C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe',
+                        os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+                    ]
+                    brave_exe = None
+                    for path in brave_exe_paths:
+                        if os.path.exists(path):
+                            brave_exe = path
+                            break
+
+                    if not brave_exe:
+                        logger.warning("未找到 Brave 浏览器，回退到 Chromium")
+                        browser_type = 'chromium'
+
+                    if not brave_exe or browser_type != 'brave':
+                        # 使用 Chromium
+                        launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                        if proxy_url:
+                            launch_args.append(f'--proxy-server={proxy_url}')
+
+                        browser = p.chromium.launch(
+                            headless=True,
+                            proxy=proxy_config if proxy_url else None,
+                            args=launch_args
+                        )
+                        context = browser.new_context()
+                        page = context.new_page()
+                    else:
+                        # 使用 Brave
+                        launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                        if proxy_url:
+                            launch_args.append(f'--proxy-server={proxy_url}')
+
+                        browser = p.chromium.launch(
+                            executable_path=brave_exe,
+                            headless=True,
+                            args=launch_args
+                        )
+                        context = browser.new_context()
+                        page = context.new_page()
+
+                else:  # chromium (默认)
+                    launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
+                    if proxy_url:
+                        launch_args.append(f'--proxy-server={proxy_url}')
+
+                    browser = p.chromium.launch(
+                        headless=True,
+                        proxy=proxy_config if proxy_url else None,
+                        args=launch_args
+                    )
+                    context = browser.new_context()
+                    page = context.new_page()
+
+                # 应用 stealth 模式
+                try:
+                    from playwright_stealth import Stealth
+                    stealth_config = Stealth()
+                    stealth_config.apply_stealth_sync(page)
+                except Exception as e:
+                    logger.warning(f"应用 stealth 模式失败: {e}")
+
+                # 设置 cookies
+                if self.cookies:
+                    context.add_cookies(self.cookies)
+
+                # 访问图表页面
+                logger.info(f"正在加载图表页面...")
+                page.goto(chart_url, timeout=60000)
+                time.sleep(5)  # 等待页面完全加载
+
+                # 移除可能的弹窗
+                try:
+                    page.mouse.click(100, 100)  # 点击页面中间，移除可能的弹窗
+                    time.sleep(2)
+                except:
+                    pass
+
+                # 截取完整图表（不使用clip参数，截取整个页面）
+                logger.info(f"截取完整图表到: {output_path}")
+                page.screenshot(path=output_path)
+
+                # 关闭浏览器
+                browser.close()
+
+                logger.info("✅ 完整图表截图完成")
+                return output_path
+
+        except Exception as e:
+            logger.error(f"截取完整图表失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def extract_hama_with_ocr(self, image_path: str) -> Optional[Dict[str, Any]]:
@@ -508,7 +673,13 @@ class HAMAOCRExtractor:
                 if len(item) >= 3:
                     text = item[1]
                     confidence = item[2]
-                    if confidence > 0.5:  # 置信度阈值
+                    # 确保 confidence 是数字类型
+                    try:
+                        conf_float = float(confidence) if not isinstance(confidence, (int, float)) else confidence
+                        if conf_float > 0.5:  # 置信度阈值
+                            text_lines.append(text)
+                    except (ValueError, TypeError):
+                        # 如果无法转换，仍然添加文本（容错处理）
                         text_lines.append(text)
 
         return text_lines
@@ -534,7 +705,12 @@ class HAMAOCRExtractor:
 
                     for i, text in enumerate(texts):
                         confidence = scores[i] if i < len(scores) else 1.0
-                        if confidence > 0.5:  # 置信度阈值
+                        # 确保 confidence 是数字类型
+                        try:
+                            conf_float = float(confidence) if not isinstance(confidence, (int, float)) else confidence
+                            if conf_float > 0.5:  # 置信度阈值
+                                text_lines.append(text)
+                        except (ValueError, TypeError):
                             text_lines.append(text)
                 elif isinstance(ocr_result, list):
                     # 旧版 PaddleOCR 格式: [[bbox, (text, confidence)], ...]
@@ -544,7 +720,12 @@ class HAMAOCRExtractor:
                             if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
                                 text = text_info[0]
                                 confidence = text_info[1]
-                                if confidence > 0.5:
+                                # 确保 confidence 是数字类型
+                                try:
+                                    conf_float = float(confidence) if not isinstance(confidence, (int, float)) else confidence
+                                    if conf_float > 0.5:
+                                        text_lines.append(text)
+                                except (ValueError, TypeError):
                                     text_lines.append(text)
         except Exception as e:
             logger.warning(f"PaddleOCR 结果解析异常: {e}")
@@ -569,7 +750,12 @@ class HAMAOCRExtractor:
         for detection in result:
             text = detection[1]
             confidence = detection[2]
-            if confidence > 0.5:
+            # 确保 confidence 是数字类型
+            try:
+                conf_float = float(confidence) if not isinstance(confidence, (int, float)) else confidence
+                if conf_float > 0.5:
+                    text_lines.append(text)
+            except (ValueError, TypeError):
                 text_lines.append(text)
 
         return text_lines
@@ -650,10 +836,11 @@ class HAMAOCRExtractor:
                 if matches:
                     for match in matches:
                         try:
-                            value = float(match.replace(',', ''))
+                            match_str = match.replace(',', '')
+                            value = float(match_str)
                             # 验证是否为合理价格（排除时间如 03, 24）
                             # 价格应该 >= 0.001 或者 >= 100
-                            if value >= 0.001 and value != int(value):  # 排除整数时间
+                            if value >= 0.001 and value % 1 != 0:  # 排除整数时间（使用模运算检查是否为整数）
                                 current_price = value
                                 logger.info(f"✅ 从正则表达式识别到价格: {current_price}")
                                 break
@@ -661,7 +848,8 @@ class HAMAOCRExtractor:
                                 current_price = value
                                 logger.info(f"✅ 从正则表达式识别到大数值价格: {current_price}")
                                 break
-                        except:
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"价格转换失败: {match} - {e}")
                             continue
                 if current_price:
                     break
@@ -700,26 +888,30 @@ class HAMAOCRExtractor:
             # 先查找小数价格（0.001 - 1000，扩大范围）
             for match in re.finditer(r'(0\.\d+|[1-9]\d*\.\d+)', full_text):
                 try:
-                    value = float(match.group(1).replace(',', ''))
+                    match_str = match.group(1).replace(',', '')
+                    value = float(match_str)
                     # 价格范围（0.001 - 1000），支持更多币种价格
-                    if 0.001 <= value <= 1000:
+                    if 0.001 <= value and value <= 1000:
                         current_price = value
                         logger.debug(f"识别小数价格: {current_price}")
                         break
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"小数价格转换失败: {match.group(1)} - {e}")
                     continue
 
             # 如果没找到小数，再查找大数值（100 - 100000）
             if not current_price:
                 for match in re.finditer(r'([1-9][\d,]+\.?\d*)', full_text):
                     try:
-                        value = float(match.group(1).replace(',', ''))
+                        match_str = match.group(1)
+                        value = float(match_str.replace(',', ''))
                         # 合理的大数值价格范围（100 - 100000）
-                        if 100 < value < 100000:
+                        if 100 < value and value < 100000:
                             current_price = value
                             logger.debug(f"识别大数值价格: {current_price}")
                             break
-                    except:
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f"转换失败: {match.group(1)} - {e}")
                         continue
 
         # 2. 查找 HAMA 状态（"HAMA状态" 标签后的文本）
@@ -826,7 +1018,8 @@ class HAMAOCRExtractor:
         result = {
             'hama_value': current_price,  # 右下角面板显示价格作为主要值
             'hama_color': hama_color,
-            'trend': trend,
+            'hama_trend': trend,  # 主趋势字段（用于邮件通知）
+            'trend': trend,        # 兼容字段
             'current_price': current_price,
             'bollinger_status': bollinger_status,
             'candle_ma_status': candle_ma_status,  # 蜡烛/MA 状态

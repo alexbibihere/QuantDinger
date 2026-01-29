@@ -94,7 +94,15 @@
       "Bash(wmic:*)",
       "Bash(kill:*)",
       "Bash(npm run dev:*)",
-      "Bash(git pull:*)"
+      "Bash(git remote prune:*)",
+      "Bash(git stash:*)",
+      "Bash(git stash pop:*)",
+      "Bash(git pull:*)",
+      "Bash(pip show:*)",
+      "Bash(pip index versions:*)",
+      "Bash(netsh:*)",
+      "Bash(reg query:*)",
+      "Bash(py:*)"
     ]
   }
 }

@@ -353,6 +353,7 @@ import {
 import { getBinanceGainers } from '@/api/multiExchange'
 import { message } from 'ant-design-vue'
 import moment from 'moment'
+import { mapState } from 'vuex'
 
 export default {
   name: 'SmartMonitor',
@@ -433,6 +434,14 @@ export default {
         { title: '描述', dataIndex: 'description' },
         { title: '时间', dataIndex: 'timestamp', width: 180, scopedSlots: { customRender: 'timestamp' } }
       ]
+    }
+  },
+  computed: {
+    ...mapState({
+      navTheme: state => state.app.theme
+    }),
+    isDarkTheme () {
+      return this.navTheme === 'dark' || this.navTheme === 'realdark'
     }
   },
   mounted () {

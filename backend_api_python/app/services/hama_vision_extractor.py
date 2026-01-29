@@ -109,11 +109,14 @@ class HAMAVisionExtractor:
 
                 # 访问图表
                 logger.info("正在加载图表...")
-                page.goto(chart_url, timeout=120000, wait_until='load')
+                # 使用 domcontentloaded 代替 load，减少超时风险
+                # 超时时间从 120 秒减少到 60 秒
+                page.goto(chart_url, timeout=60000, wait_until='domcontentloaded')
 
                 # 等待图表渲染
                 logger.info("等待图表渲染...")
-                page.wait_for_timeout(50000)
+                # 减少等待时间从 50 秒到 15 秒，避免长时间等待
+                page.wait_for_timeout(15000)
 
                 # 截图
                 logger.info(f"截取图表到: {output_path}")

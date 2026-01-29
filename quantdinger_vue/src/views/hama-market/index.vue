@@ -62,7 +62,7 @@
         :loading="loading"
         :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: total => $t('hamaMarket.total', { total }) }"
         row-key="symbol"
-        :scroll="{ x: 1200 }"
+        :scroll="{ x: 1500 }"
         size="middle"
       >
         <!-- 币种 -->
@@ -76,6 +76,45 @@
             {{ formatPrice(record.hama_brave.hama_value) }}
           </span>
           <span v-else style="color: #999">-</span>
+        </template>
+
+        <!-- 15分钟周期 -->
+        <template slot="timeframe_15m" slot-scope="text, record">
+          <a-tag
+            v-if="record.hama_brave && record.hama_brave.timeframe_15m"
+            :color="getTimeframeColor(record.hama_brave.timeframe_15m.hama_color)"
+            style="font-size: 11px"
+          >
+            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_15m.hama_trend)" />
+            {{ getTimeframeText(record.hama_brave.timeframe_15m.hama_trend) }}
+          </a-tag>
+          <span v-else style="color: #999; font-size: 12px">-</span>
+        </template>
+
+        <!-- 1小时周期 -->
+        <template slot="timeframe_1h" slot-scope="text, record">
+          <a-tag
+            v-if="record.hama_brave && record.hama_brave.timeframe_1h"
+            :color="getTimeframeColor(record.hama_brave.timeframe_1h.hama_color)"
+            style="font-size: 11px"
+          >
+            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_1h.hama_trend)" />
+            {{ getTimeframeText(record.hama_brave.timeframe_1h.hama_trend) }}
+          </a-tag>
+          <span v-else style="color: #999; font-size: 12px">-</span>
+        </template>
+
+        <!-- 4小时周期 -->
+        <template slot="timeframe_4h" slot-scope="text, record">
+          <a-tag
+            v-if="record.hama_brave && record.hama_brave.timeframe_4h"
+            :color="getTimeframeColor(record.hama_brave.timeframe_4h.hama_color)"
+            style="font-size: 11px"
+          >
+            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_4h.hama_trend)" />
+            {{ getTimeframeText(record.hama_brave.timeframe_4h.hama_trend) }}
+          </a-tag>
+          <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
         <!-- HAMA 状态 -->
@@ -121,6 +160,19 @@
           <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
+        <!-- HAMA截图 -->
+        <template slot="screenshot" slot-scope="text, record">
+          <div v-if="record.hama_brave && record.hama_brave.screenshot_base64" class="screenshot-container">
+            <img
+              :src="`data:image/png;base64,${record.hama_brave.screenshot_base64}`"
+              :alt="`${record.symbol} HAMA截图`"
+              class="screenshot-thumbnail"
+              @click="previewScreenshot(record)"
+            />
+          </div>
+          <span v-else style="color: #999; font-size: 12px">-</span>
+        </template>
+
         <!-- 操作 -->
         <template slot="action" slot-scope="text, record">
           <a-button
@@ -135,10 +187,23 @@
         </template>
       </a-table>
     </a-card>
+
+    <!-- 图片预览 -->
+    <a-modal
+      :visible="previewVisible"
+      :title="previewTitle"
+      :footer="null"
+      @cancel="handlePreviewCancel"
+      width="800px"
+      centered
+    >
+      <img :src="previewImage" style="width: 100%" />
+    </a-modal>
   </div>
 </template>
 
 <script>
+import { mapState } from 'vuex'
 import { getHamaWatchlist } from '@/api/hamaMarket'
 import realtimePriceMixin from '@/mixins/realtimePrice'
 
@@ -150,10 +215,19 @@ export default {
       loading: false,
       watchlist: [],
       apiConnected: false,
-      timer: null
+      timer: null,
+      previewVisible: false,
+      previewImage: '',
+      previewTitle: ''
     }
   },
   computed: {
+    ...mapState({
+      navTheme: state => state.app.theme
+    }),
+    isDarkTheme () {
+      return this.navTheme === 'dark' || this.navTheme === 'realdark'
+    },
     apiStatusColor () {
       return this.apiConnected ? 'green' : 'red'
     },
@@ -185,9 +259,23 @@ export default {
           align: 'right'
         },
         {
-          title: 'HAMA状态',
-          key: 'hama_status_display',
-          scopedSlots: { customRender: 'hama_status_display' },
+          title: '15分钟',
+          key: 'timeframe_15m',
+          scopedSlots: { customRender: 'timeframe_15m' },
+          width: 120,
+          align: 'center'
+        },
+        {
+          title: '1小时',
+          key: 'timeframe_1h',
+          scopedSlots: { customRender: 'timeframe_1h' },
+          width: 120,
+          align: 'center'
+        },
+        {
+          title: '4小时',
+          key: 'timeframe_4h',
+          scopedSlots: { customRender: 'timeframe_4h' },
           width: 120,
           align: 'center'
         },
@@ -210,6 +298,13 @@ export default {
           key: 'last_cross',
           scopedSlots: { customRender: 'last_cross' },
           width: 180,
+          align: 'center'
+        },
+        {
+          title: 'HAMA截图',
+          key: 'screenshot',
+          scopedSlots: { customRender: 'screenshot' },
+          width: 120,
           align: 'center'
         },
         {
@@ -289,6 +384,44 @@ export default {
 
     getTradingViewUrl (symbol) {
       return `https://cn.tradingview.com/chart/?symbol=BINANCE:${symbol}`
+    },
+
+    previewScreenshot (record) {
+      if (record.hama_brave && record.hama_brave.screenshot_base64) {
+        this.previewImage = `data:image/png;base64,${record.hama_brave.screenshot_base64}`
+        this.previewTitle = `${record.symbol} HAMA截图`
+        this.previewVisible = true
+      }
+    },
+
+    handlePreviewCancel () {
+      this.previewVisible = false
+    },
+
+    // 多周期数据辅助方法
+    getTimeframeColor (hamaColor) {
+      if (!hamaColor) return 'default'
+      const color = hamaColor.toLowerCase()
+      if (color === 'green') return 'green'
+      if (color === 'red') return 'red'
+      return 'default'
+    },
+
+    getTimeframeIcon (hamaTrend) {
+      if (!hamaTrend) return 'minus'
+      const trend = hamaTrend.toLowerCase()
+      if (trend === 'up') return 'arrow-up'
+      if (trend === 'down') return 'arrow-down'
+      return 'minus'
+    },
+
+    getTimeframeText (hamaTrend) {
+      if (!hamaTrend) return '-'
+      const trend = hamaTrend.toLowerCase()
+      if (trend === 'up') return '上涨'
+      if (trend === 'down') return '下跌'
+      if (trend === 'neutral') return '盘整'
+      return '-'
     }
   }
 }
@@ -337,6 +470,28 @@ export default {
 
   .bb-status {
     font-family: 'Roboto Mono', monospace;
+  }
+
+  .screenshot-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .screenshot-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #d9d9d9;
+    transition: all 0.3s;
+
+    &:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-color: #1890ff;
+    }
   }
 
   @keyframes pulse {

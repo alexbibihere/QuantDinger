@@ -228,6 +228,7 @@
 </template>
 
 <script>
+import { mapState } from 'vuex'
 import { getTopGainers, getChartScreenshot } from '@/api/tradingviewScanner'
 import realtimePriceMixin from '@/mixins/realtimePrice'
 import { Empty } from 'ant-design-vue'
@@ -250,6 +251,12 @@ export default {
     }
   },
   computed: {
+    ...mapState({
+      navTheme: state => state.app.theme
+    }),
+    isDarkTheme () {
+      return this.navTheme === 'dark' || this.navTheme === 'realdark'
+    },
     sseStatusColor () {
       return this.sseConnected ? 'green' : 'red'
     },
