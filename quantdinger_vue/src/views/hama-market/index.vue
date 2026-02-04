@@ -91,32 +91,6 @@
           <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
-        <!-- 1小时周期 -->
-        <template slot="timeframe_1h" slot-scope="text, record">
-          <a-tag
-            v-if="record.hama_brave && record.hama_brave.timeframe_1h"
-            :color="getTimeframeColor(record.hama_brave.timeframe_1h.hama_color)"
-            style="font-size: 11px"
-          >
-            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_1h.hama_trend)" />
-            {{ getTimeframeText(record.hama_brave.timeframe_1h.hama_trend) }}
-          </a-tag>
-          <span v-else style="color: #999; font-size: 12px">-</span>
-        </template>
-
-        <!-- 4小时周期 -->
-        <template slot="timeframe_4h" slot-scope="text, record">
-          <a-tag
-            v-if="record.hama_brave && record.hama_brave.timeframe_4h"
-            :color="getTimeframeColor(record.hama_brave.timeframe_4h.hama_color)"
-            style="font-size: 11px"
-          >
-            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_4h.hama_trend)" />
-            {{ getTimeframeText(record.hama_brave.timeframe_4h.hama_trend) }}
-          </a-tag>
-          <span v-else style="color: #999; font-size: 12px">-</span>
-        </template>
-
         <!-- HAMA 状态 -->
         <template slot="hama_status_display" slot-scope="text, record">
           <a-tag
@@ -262,20 +236,6 @@ export default {
           title: '15分钟',
           key: 'timeframe_15m',
           scopedSlots: { customRender: 'timeframe_15m' },
-          width: 120,
-          align: 'center'
-        },
-        {
-          title: '1小时',
-          key: 'timeframe_1h',
-          scopedSlots: { customRender: 'timeframe_1h' },
-          width: 120,
-          align: 'center'
-        },
-        {
-          title: '4小时',
-          key: 'timeframe_4h',
-          scopedSlots: { customRender: 'timeframe_4h' },
           width: 120,
           align: 'center'
         },

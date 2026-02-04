@@ -71,7 +71,8 @@ class HamaEmailNotifier:
         price: float,
         cross_type: Optional[str] = None,
         screenshot_url: Optional[str] = None,
-        screenshot_path: Optional[str] = None,  # 新增：截图文件路径
+        screenshot_path: Optional[str] = None,  # HAMA 指标面板截图（小图）
+        full_chart_path: Optional[str] = None,  # 全屏图表截图（大图）
         extra_data: Optional[Dict[str, Any]] = None,
         recipients: Optional[str] = None
     ) -> bool:
@@ -86,7 +87,8 @@ class HamaEmailNotifier:
             price: 当前价格
             cross_type: 交叉类型 (cross_up/cross_down) - 可选
             screenshot_url: 截图 URL - 可选
-            screenshot_path: 截图文件路径（用于附件）- 可选
+            screenshot_path: HAMA 指标面板截图文件路径（小图附件）- 可选
+            full_chart_path: 全屏图表截图文件路径（大图附件）- 可选
             extra_data: 额外数据 - 可选
             recipients: 收件人邮箱（逗号分隔），不指定则使用默认收件人
 
@@ -140,20 +142,21 @@ class HamaEmailNotifier:
             if body_html:
                 msg.add_alternative(body_html, subtype="html")
 
-            # 添加截图附件（如果提供了文件路径）
-            if screenshot_path and os.path.exists(screenshot_path):
+            # 添加全屏图表附件（优先使用全屏图，否则使用小图）
+            chart_path = full_chart_path if full_chart_path and os.path.exists(full_chart_path) else screenshot_path
+            if chart_path and os.path.exists(chart_path):
                 try:
-                    with open(screenshot_path, 'rb') as f:
+                    with open(chart_path, 'rb') as f:
                         image_data = f.read()
                         msg.add_attachment(
                             image_data,
                             maintype='image',
                             subtype='png',
-                            filename=os.path.basename(screenshot_path)
+                            filename=os.path.basename(chart_path)
                         )
-                    logger.info(f"✅ 已添加截图附件: {screenshot_path}")
+                    logger.info(f"✅ 已添加图表附件: {chart_path}")
                 except Exception as e:
-                    logger.warning(f"添加截图附件失败: {e}")
+                    logger.warning(f"添加图表附件失败: {e}")
 
             # 连接 SMTP 服务器并发送
             use_ssl = bool(self.smtp_use_ssl) or int(self.smtp_port or 0) == 465
@@ -286,11 +289,11 @@ class HamaEmailNotifier:
         if signal_text:
             table_rows.append(("信号", esc(signal_text)))
 
-        # 多时间周期数据
+        # 多时间周期数据（只显示15m周期）
         if extra_data and 'timeframes' in extra_data:
             timeframes = extra_data['timeframes']
 
-            # 添加15分钟周期
+            # 只添加15分钟周期
             if '15m' in timeframes:
                 tf_15m = timeframes['15m']
                 tf_color_15m = "#2ECC71" if tf_15m.get('color') == 'green' else "#E74C3C"
@@ -298,26 +301,6 @@ class HamaEmailNotifier:
                 table_rows.append((
                     "15m 周期",
                     f"<span style='color:{tf_color_15m};font-weight:bold;'>{esc(tf_trend_15m)}</span> | 值: {tf_15m.get('hama_value', 0):.6f}"
-                ))
-
-            # 添加1小时周期
-            if '1h' in timeframes:
-                tf_1h = timeframes['1h']
-                tf_color_1h = "#2ECC71" if tf_1h.get('color') == 'green' else "#E74C3C"
-                tf_trend_1h = "🟢 上涨" if tf_1h.get('trend') == 'up' else ("🔴 下跌" if tf_1h.get('trend') == 'down' else "⚪ 中性")
-                table_rows.append((
-                    "1h 周期",
-                    f"<span style='color:{tf_color_1h};font-weight:bold;'>{esc(tf_trend_1h)}</span> | 值: {tf_1h.get('hama_value', 0):.6f}"
-                ))
-
-            # 添加4小时周期
-            if '4h' in timeframes:
-                tf_4h = timeframes['4h']
-                tf_color_4h = "#2ECC71" if tf_4h.get('color') == 'green' else "#E74C3C"
-                tf_trend_4h = "🟢 上涨" if tf_4h.get('trend') == 'up' else ("🔴 下跌" if tf_4h.get('trend') == 'down' else "⚪ 中性")
-                table_rows.append((
-                    "4h 周期",
-                    f"<span style='color:{tf_color_4h};font-weight:bold;'>{esc(tf_trend_4h)}</span> | 值: {tf_4h.get('hama_value', 0):.6f}"
                 ))
 
         # 额外数据（排除 timeframes 避免重复显示）
@@ -386,7 +369,7 @@ class HamaEmailNotifier:
                     本邮件由 QuantDinger HAMA 监控系统自动发送
                 </p>
                 <p style="margin:0;color:#9CA3AF;">
-                    提示: 同一币种在 {self.cooldown_seconds // 60} 分钟内只会发送一次提醒
+                    提示: 邮件通知实时发送，无冷却限制
                 </p>
             </div>
         </div>

@@ -19,6 +19,6 @@ hama指标访问流程：
 QQ邮件
 邮箱：32319731984@qq.com
 授权码： agwnmwaexbytbicf
-
+收件人：329731984@qq.com,845848958@qq.com
 
 所有新创建的都按规则放入分别的文件夹，md放docs文件夹，bat放bat文件夹

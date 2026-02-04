@@ -228,9 +228,13 @@ class HAMAOCRExtractor:
             browser_type: 浏览器类型 (chromium, firefox, webkit, brave)
         """
         proxy_url = os.getenv('PROXY_URL') or os.getenv('ALL_PROXY') or os.getenv('HTTPS_PROXY')
+        # Playwright 不支持 socks5h，转换为 socks5
+        if proxy_url and proxy_url.startswith('socks5h://'):
+            proxy_url = proxy_url.replace('socks5h://', 'socks5://')
         proxy_config = {'server': proxy_url, 'bypass': 'localhost,127.0.0.1'} if proxy_url else None
 
-        # 调试日志
+        # 使用 print 确保立即输出
+        print(f"[DEBUG] capture_chart - proxy_url={repr(proxy_url)}, proxy_config={repr(proxy_config)}")
         logger.info(f"代理配置: proxy_url={repr(proxy_url)}, proxy_config={repr(proxy_config)}")
 
         try:
@@ -462,14 +466,13 @@ class HAMAOCRExtractor:
                 page_width = viewport_size['width']
                 page_height = viewport_size['height']
 
-                # 计算截图区域: 精确定位到右下角 HAMA 指标面板
-                # HAMA 信息面板是表格形式，通常在右下角
-                # 只截取从"价格"到"最近交叉"的区域
+                # 计算截图区域: HAMA 指标面板在右下角
+                # 调整截取区域以包含完整的 HAMA 指标面板
                 clip = {
-                    'x': int(page_width * 0.72),   # 从页面 72% 处开始（右侧28%）
-                    'y': int(page_height * 0.45),  # 从页面 45% 处开始（往上移动，从55%改为45%）
-                    'width': int(page_width * 0.28),   # 截取右侧28%宽度
-                    'height': int(page_height * 0.55)  # 截取底部55%高度（增加高度以包含完整区域）
+                    'x': int(page_width * 0.65),   # 从页面 65% 处开始（右侧35%）
+                    'y': int(page_height * 0.35),  # 从页面 35% 处开始
+                    'width': int(page_width * 0.35),   # 截取右侧35%宽度
+                    'height': int(page_height * 0.65)  # 截取底部65%高度
                 }
 
                 logger.info(f"页面尺寸: {page_width}x{page_height}, 截图区域: x={clip['x']}, y={clip['y']}, width={clip['width']}, height={clip['height']}")
@@ -495,9 +498,14 @@ class HAMAOCRExtractor:
             browser_type: 浏览器类型 (chromium, firefox, webkit, brave)
         """
         proxy_url = os.getenv('PROXY_URL') or os.getenv('ALL_PROXY') or os.getenv('HTTPS_PROXY')
+        # Playwright 不支持 socks5h，转换为 socks5
+        if proxy_url and proxy_url.startswith('socks5h://'):
+            proxy_url = proxy_url.replace('socks5h://', 'socks5://')
         proxy_config = {'server': proxy_url, 'bypass': 'localhost,127.0.0.1'} if proxy_url else None
 
-        logger.info(f"截取完整图表，代理配置: proxy_url={repr(proxy_url)}")
+        # 使用 print 确保立即输出
+        print(f"[DEBUG] capture_full_chart - proxy_url={repr(proxy_url)}, proxy_config={repr(proxy_config)}")
+        logger.info(f"截取完整图表，代理配置: proxy_url={repr(proxy_url)}, proxy_config={repr(proxy_config)}")
 
         try:
             with sync_playwright() as p:
@@ -558,6 +566,7 @@ class HAMAOCRExtractor:
                         browser = p.chromium.launch(
                             executable_path=brave_exe,
                             headless=True,
+                            proxy=proxy_config if proxy_url else None,
                             args=launch_args
                         )
                         context = browser.new_context()
@@ -590,7 +599,7 @@ class HAMAOCRExtractor:
 
                 # 访问图表页面
                 logger.info(f"正在加载图表页面...")
-                page.goto(chart_url, timeout=60000)
+                page.goto(chart_url, timeout=120000, wait_until='domcontentloaded')
                 time.sleep(5)  # 等待页面完全加载
 
                 # 移除可能的弹窗

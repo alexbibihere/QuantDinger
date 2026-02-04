@@ -43,19 +43,24 @@ DEMO_MODE = os.getenv('HAMA_DEMO_MODE', 'false').lower() == 'true'
 # 是否启用 Brave 浏览器监控
 BRAVE_MONITOR_ENABLED = os.getenv('BRAVE_MONITOR_ENABLED', 'true').lower() == 'true'
 
-# 默认监控币种列表
-DEFAULT_SYMBOLS = [
-    'BTCUSDT',
-    'ETHUSDT',
-    'BNBUSDT',
-    'SOLUSDT',
-    'XRPUSDT',
-    'ADAUSDT',
-    'DOGEUSDT',
-    'AVAXUSDT',
-    'DOTUSDT',
-    'LINKUSDT'
-]
+# 从环境变量读取监控币种列表，如果为空则使用默认列表
+_BRAVE_MONITOR_SYMBOLS = os.getenv('BRAVE_MONITOR_SYMBOLS', '').strip()
+if _BRAVE_MONITOR_SYMBOLS:
+    DEFAULT_SYMBOLS = [s.strip().upper() for s in _BRAVE_MONITOR_SYMBOLS.split(',') if s.strip()]
+else:
+    # 默认监控币种列表
+    DEFAULT_SYMBOLS = [
+        'BTCUSDT',
+        'ETHUSDT',
+        'BNBUSDT',
+        'SOLUSDT',
+        'XRPUSDT',
+        'ADAUSDT',
+        'DOGEUSDT',
+        'AVAXUSDT',
+        'DOTUSDT',
+        'LINKUSDT'
+    ]
 
 
 def generate_demo_hama_data(symbol):

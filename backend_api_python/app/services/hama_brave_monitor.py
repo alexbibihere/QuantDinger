@@ -121,10 +121,18 @@ class HamaBraveMonitor:
             table_exists = cursor.fetchone() is not None
 
             if table_exists:
-                # 检查是否有 timeframe 列
+                # 检查是否有 full_chart_path 列
                 cursor.execute("PRAGMA table_info(hama_monitor_cache)")
                 columns = [row[1] for row in cursor.fetchall()]
 
+                if 'full_chart_path' not in columns:
+                    logger.info("检测到旧表结构，正在添加 full_chart_path 字段...")
+
+                    # 添加 full_chart_path 列
+                    cursor.execute('ALTER TABLE hama_monitor_cache ADD COLUMN full_chart_path VARCHAR(255)')
+                    logger.info("✅ 已添加 full_chart_path 字段")
+
+                # 检查是否有 timeframe 列（旧版本兼容）
                 if 'timeframe' not in columns:
                     logger.info("检测到旧表结构，正在迁移到新结构...")
 
@@ -139,6 +147,7 @@ class HamaBraveMonitor:
                             price DECIMAL(20, 8),
                             ocr_text TEXT,
                             screenshot_path VARCHAR(255),
+                            full_chart_path VARCHAR(255),
                             candle_ma_status TEXT,
                             bollinger_status TEXT,
                             last_cross_info TEXT,
@@ -155,10 +164,10 @@ class HamaBraveMonitor:
                     cursor.execute('''
                         INSERT INTO hama_monitor_cache_new
                         (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text,
-                         screenshot_path, candle_ma_status, bollinger_status, last_cross_info,
+                         screenshot_path, full_chart_path, candle_ma_status, bollinger_status, last_cross_info,
                          email_sent, email_sent_at, monitored_at, created_at, updated_at)
                         SELECT symbol, '15m', hama_trend, hama_color, hama_value, price, ocr_text,
-                               screenshot_path, candle_ma_status, bollinger_status, last_cross_info,
+                               screenshot_path, screenshot_path, candle_ma_status, bollinger_status, last_cross_info,
                                email_sent, email_sent_at, monitored_at, created_at, updated_at
                         FROM hama_monitor_cache
                     ''')
@@ -181,6 +190,7 @@ class HamaBraveMonitor:
                         price DECIMAL(20, 8),
                         ocr_text TEXT,
                         screenshot_path VARCHAR(255),
+                        full_chart_path VARCHAR(255),
                         candle_ma_status TEXT,
                         bollinger_status TEXT,
                         last_cross_info TEXT,
@@ -234,6 +244,58 @@ class HamaBraveMonitor:
             ''')
 
             logger.info("✅ 邮件发送记录表初始化成功")
+
+            # 创建 HAMA 监控历史表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS hama_monitor_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol VARCHAR(20) NOT NULL,
+                    timeframe VARCHAR(10) NOT NULL,
+                    hama_trend VARCHAR(10),
+                    hama_color VARCHAR(10),
+                    hama_value DECIMAL(20, 8),
+                    price DECIMAL(20, 8),
+                    ocr_text TEXT,
+                    screenshot_path VARCHAR(255),
+                    full_chart_path VARCHAR(255),
+                    candle_ma_status TEXT,
+                    bollinger_status TEXT,
+                    last_cross_info TEXT,
+                    monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 创建历史表索引
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_hama_history_symbol
+                ON hama_monitor_history(symbol)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_hama_history_monitored
+                ON hama_monitor_history(monitored_at)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_hama_history_symbol_monitored
+                ON hama_monitor_history(symbol, monitored_at)
+            ''')
+
+            logger.info("✅ HAMA 监控历史表初始化成功")
+
+            # 检查历史表是否需要添加 full_chart_path 字段
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hama_monitor_history'")
+            history_table_exists = cursor.fetchone() is not None
+
+            if history_table_exists:
+                cursor.execute("PRAGMA table_info(hama_monitor_history)")
+                history_columns = [row[1] for row in cursor.fetchall()]
+
+                if 'full_chart_path' not in history_columns:
+                    logger.info("检测到历史表缺少 full_chart_path 字段，正在添加...")
+                    try:
+                        cursor.execute('ALTER TABLE hama_monitor_history ADD COLUMN full_chart_path VARCHAR(255)')
+                        logger.info("✅ 历史表已添加 full_chart_path 字段")
+                    except Exception as e:
+                        logger.warning(f"添加历史表字段失败: {e}")
 
             # 提交更改
             self.sqlite_conn.commit()
@@ -353,11 +415,9 @@ class HamaBraveMonitor:
                             'screenshot_base64': primary_data.get('screenshot_base64'),
                             'cached_at': primary_data.get('monitored_at'),
                             'cache_source': 'sqlite_brave_monitor',
-                            # 所有时间周期数据
+                            # 只保留 15m 时间周期数据
                             'timeframes': timeframes,
                             'timeframe_15m': timeframes.get('15m'),
-                            'timeframe_1h': timeframes.get('1h'),
-                            'timeframe_4h': timeframes.get('4h'),
                         }
                         return result
             except Exception as e:
@@ -443,9 +503,9 @@ class HamaBraveMonitor:
                 # 1. 更新缓存表 (每条记录包含 symbol + timeframe)
                 cursor.execute('''
                     INSERT OR REPLACE INTO hama_monitor_cache
-                    (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path,
+                    (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, full_chart_path,
                      candle_ma_status, bollinger_status, last_cross_info, monitored_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     timeframe,
@@ -455,6 +515,7 @@ class HamaBraveMonitor:
                     hama_data.get('price'),
                     hama_data.get('ocr_text', ''),
                     hama_data.get('screenshot_path', ''),
+                    hama_data.get('full_chart_path', ''),
                     hama_data.get('candle_ma_status', ''),
                     hama_data.get('bollinger_status', ''),
                     hama_data.get('last_cross_info', ''),
@@ -464,9 +525,9 @@ class HamaBraveMonitor:
                 # 2. 插入历史表 (每次监控都插入新记录)
                 cursor.execute('''
                     INSERT INTO hama_monitor_history
-                    (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path,
+                    (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, full_chart_path,
                      candle_ma_status, bollinger_status, last_cross_info, monitored_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     timeframe,
@@ -476,6 +537,7 @@ class HamaBraveMonitor:
                     hama_data.get('price'),
                     hama_data.get('ocr_text', ''),
                     hama_data.get('screenshot_path', ''),
+                    hama_data.get('full_chart_path', ''),
                     hama_data.get('candle_ma_status', ''),
                     hama_data.get('bollinger_status', ''),
                     hama_data.get('last_cross_info', ''),
@@ -506,7 +568,7 @@ class HamaBraveMonitor:
 
         return success
 
-    def _monitor_single_timeframe(self, symbol: str, interval: int, browser_type: str = 'chromium') -> Optional[Dict[str, Any]]:
+    def _monitor_single_timeframe(self, symbol: str, interval: int, browser_type: str = 'brave') -> Optional[Dict[str, Any]]:
         """
         监控单个币种的单个时间周期
 
@@ -557,11 +619,19 @@ class HamaBraveMonitor:
                 logger.warning(f"{symbol} {timeframe_name} OCR 识别失败")
                 return None
 
+            # 步骤 3: 截取完整图表（用于邮件附件）
+            logger.debug(f"正在截取完整图表 {symbol} {timeframe_name}...")
+            full_chart_result = self.ocr_extractor.capture_full_chart(chart_url, full_chart_path, browser_type)
+            if full_chart_result:
+                logger.info(f"✅ 完整图表截图成功: {full_chart_filename}")
+            else:
+                logger.warning(f"完整图表截图失败，将使用 HAMA 面板截图")
+
             # 添加截图路径信息
             hama_data['screenshot_path'] = hama_panel_filename
-            hama_data['full_chart_path'] = full_chart_filename
+            hama_data['full_chart_path'] = full_chart_filename if full_chart_result else hama_panel_filename
             hama_data['screenshot_url'] = f"/screenshot/{hama_panel_filename}"
-            hama_data['full_chart_url'] = f"/screenshot/{full_chart_filename}"
+            hama_data['full_chart_url'] = f"/screenshot/{full_chart_filename if full_chart_result else hama_panel_filename}"
             hama_data['timeframe'] = timeframe_name
             hama_data['timestamp'] = int(time.time() * 1000)
 
@@ -574,7 +644,7 @@ class HamaBraveMonitor:
             logger.error(traceback.format_exc())
             return None
 
-    def monitor_symbol(self, symbol: str, interval: int = 15, browser_type: str = 'chromium') -> Optional[Dict[str, Any]]:
+    def monitor_symbol(self, symbol: str, interval: int = 15, browser_type: str = 'brave') -> Optional[Dict[str, Any]]:
         """
         监控单个币种的单个时间周期 HAMA 状态
 
@@ -620,7 +690,7 @@ class HamaBraveMonitor:
             logger.error(traceback.format_exc())
             return None
 
-    def monitor_batch(self, symbols: List[str], intervals: List[int] = None, browser_type: str = 'chromium', use_threading: bool = True) -> Dict[str, Any]:
+    def monitor_batch(self, symbols: List[str], intervals: List[int] = None, browser_type: str = 'brave', use_threading: bool = True) -> Dict[str, Any]:
         """
         批量监控多个币种的多个时间周期
 
@@ -634,7 +704,7 @@ class HamaBraveMonitor:
             监控结果统计
         """
         if intervals is None:
-            intervals = [15, 60, 240]  # 默认监控 15m, 1h, 4h
+            intervals = [15]  # 默认监控 15m
 
         results = {
             'total': len(symbols) * len(intervals),
@@ -724,7 +794,7 @@ class HamaBraveMonitor:
         logger.info(f"批量监控完成: 成功 {results['success']}/{results['total']}")
         return results
 
-    def start_monitoring(self, symbols: List[str], interval: int = 600, browser_type: str = 'chromium', intervals: List[int] = None):
+    def start_monitoring(self, symbols: List[str], interval: int = 600, browser_type: str = 'brave', intervals: List[int] = None):
         """
         启动持续监控（后台线程），支持多时间周期并行监控
 
@@ -739,7 +809,7 @@ class HamaBraveMonitor:
             return
 
         if intervals is None:
-            intervals = [15, 60, 240]
+            intervals = [15]
 
         self.is_monitoring = True
 
@@ -829,7 +899,7 @@ class HamaBraveMonitor:
 
     # ==================== 新增优化功能 ====================
 
-    def monitor_batch_parallel(self, symbols: List[str], browser_type: str = 'chromium', max_workers: int = None) -> Dict[str, Any]:
+    def monitor_batch_parallel(self, symbols: List[str], browser_type: str = 'brave', max_workers: int = None) -> Dict[str, Any]:
         """
         并行批量监控多个币种（性能优化）
 
@@ -854,9 +924,9 @@ class HamaBraveMonitor:
         logger.info(f"开始并行批量监控 {len(symbols)} 个币种，并发数: {max_workers}")
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # 提交所有任务
+            # 提交所有任务 (使用 lambda 确保参数正确传递)
             future_to_symbol = {
-                executor.submit(self.monitor_symbol, symbol, browser_type): symbol
+                executor.submit(lambda s=symbol, bt=browser_type: self.monitor_symbol(s, 15, bt)): symbol
                 for symbol in symbols
             }
 
@@ -891,7 +961,7 @@ class HamaBraveMonitor:
         logger.info(f"并行批量监控完成: 成功 {results['success']}/{results['total']}, 失败 {results['failed']}")
         return results
 
-    def warmup_cache(self, hot_symbols: List[str] = None, browser_type: str = 'chromium') -> Dict[str, Any]:
+    def warmup_cache(self, hot_symbols: List[str] = None, browser_type: str = 'brave') -> Dict[str, Any]:
         """
         缓存预热：启动时预先监控热门币种
 
@@ -1092,7 +1162,7 @@ class HamaBraveMonitor:
             logger.error(f"获取缓存币种数量失败: {e}")
             return 0
 
-    def start_monitoring_smart(self, symbols: List[str], base_interval: int = 600, browser_type: str = 'chromium'):
+    def start_monitoring_smart(self, symbols: List[str], base_interval: int = 600, browser_type: str = 'brave'):
         """
         启动智能持续监控（动态调整间隔）
 
@@ -1203,8 +1273,18 @@ class HamaBraveMonitor:
                     else:
                         logger.info(f"❌ {symbol} 颜色未变化: {last_color} → {current_color}，不发送邮件")
             else:
-                # 历史表中没有记录（第一次监控），不发送通知
-                logger.info(f"🆕 首次监控 {symbol}（历史表无记录），记录初始状态: {current_color}")
+                # 历史表中没有记录（第一次监控），发送通知
+                logger.info(f"🆕 首次监控 {symbol}（历史表无记录），当前状态: {current_color}")
+                # 如果当前状态有效（非盘整），发送首次通知
+                current_is_valid = current_color and current_color != '' and current_color not in ('neutral', 'gray')
+                if current_is_valid:
+                    should_notify = True
+                    if current_color == 'green':
+                        cross_type = 'cross_up'
+                        logger.info(f"✅ 首次监控检测到上涨趋势: {symbol} ({current_color})")
+                    elif current_color == 'red':
+                        cross_type = 'cross_down'
+                        logger.info(f"✅ 首次监控检测到下跌趋势: {symbol} ({current_color})")
 
             if not should_notify:
                 return False
@@ -1215,15 +1295,51 @@ class HamaBraveMonitor:
                 logger.info(f"{symbol} 不在邮件监控白名单中，跳过发送（仅 BTC/ETH 发送邮件）")
                 return False
 
-            # 检查邮件冷却
-            if self.email_notifier.is_cooldown_active(symbol):
-                logger.info(f"{symbol} 在邮件冷却期内，跳过发送")
-                return False
+            # 检查邮件冷却（已禁用）
+            # if self.email_notifier.is_cooldown_active(symbol):
+            #     logger.info(f"{symbol} 在邮件冷却期内，跳过发送")
+            #     return False
 
             # 构建截图完整路径
             from pathlib import Path
             screenshot_dir = Path(__file__).parent.parent / 'screenshots'
+
+            # 使用监控时生成的截图（全屏图优先，没有则用 HAMA 面板图）
+            screenshot_filename = hama_data.get('full_chart_path') or hama_data.get('screenshot_path')
             screenshot_full_path = str(screenshot_dir / screenshot_filename)
+
+            # 如果监控时没有生成全屏截图，则尝试现在生成
+            if not hama_data.get('full_chart_path') or hama_data.get('full_chart_path') == hama_data.get('screenshot_path'):
+                full_chart_path = None
+                try:
+                    # 构建图表 URL
+                    interval = hama_data.get('interval', 15)
+                    chart_url = self._build_chart_url(symbol, interval)
+
+                    # 生成全屏截图文件名
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    full_chart_filename = f"hama_full_{symbol}_{interval}m_{timestamp}.png"
+                    full_chart_output_path = str(screenshot_dir / full_chart_filename)
+
+                    # 截取全屏图表
+                    logger.info(f"正在补截全屏图表: {symbol}")
+                    from app.services.hama_ocr_extractor import get_hama_ocr_extractor
+                    ocr_extractor = get_hama_ocr_extractor()
+                    result = ocr_extractor.capture_full_chart(
+                        chart_url=chart_url,
+                        output_path=full_chart_output_path,
+                        browser_type=self.browser_type
+                    )
+                    if result:
+                        full_chart_path = full_chart_output_path
+                        screenshot_full_path = full_chart_path
+                        logger.info(f"✅ 补截全屏图表成功: {full_chart_path}")
+                    else:
+                        logger.warning(f"⚠️  补截全屏图表失败，将使用已有截图")
+                except Exception as e:
+                    logger.warning(f"补截全屏图表失败: {e}")
+            else:
+                full_chart_path = screenshot_full_path
 
             # 发送邮件通知
             logger.info(f"准备发送邮件通知: {symbol} ({current_color}, {current_trend})")
@@ -1247,7 +1363,8 @@ class HamaBraveMonitor:
                 price=float(price) if price else 0,
                 cross_type=cross_type,
                 screenshot_url=f"/screenshots/{screenshot_filename}",
-                screenshot_path=screenshot_full_path,  # 传递完整的截图文件路径作为附件
+                screenshot_path=screenshot_full_path,  # 使用全屏图表截图作为附件
+                full_chart_path=full_chart_path,
                 extra_data=extra_data
             )
 
@@ -1269,14 +1386,23 @@ class HamaBraveMonitor:
                 logger.info(f"✅ {symbol} 邮件通知发送成功")
                 # 更新数据库中的邮件发送状态
                 try:
-                    if self.use_sqlite and self.sqlite_conn:
-                        cursor = self.sqlite_conn.cursor()
+                    if self.use_sqlite:
+                        import sqlite3
+                        import os
+
+                        # 创建新的连接，避免线程安全问题
+                        db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db')
+                        db_path = os.path.abspath(db_path)
+
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE hama_monitor_cache
                             SET email_sent = 1, email_sent_at = CURRENT_TIMESTAMP
                             WHERE symbol = ?
                         """, (symbol,))
-                        self.sqlite_conn.commit()
+                        conn.commit()
+                        conn.close()
                         logger.info(f"✅ {symbol} 邮件发送状态已更新到数据库")
                 except Exception as e:
                     logger.warning(f"更新邮件发送状态失败: {e}")
@@ -1290,6 +1416,19 @@ class HamaBraveMonitor:
             import traceback
             logger.error(traceback.format_exc())
             return False
+
+    def _build_chart_url(self, symbol: str, interval: int) -> str:
+        """
+        构建 TradingView 图表 URL
+
+        Args:
+            symbol: 币种符号
+            interval: 时间周期 (15=15m, 60=1h, 240=4h)
+
+        Returns:
+            完整的图表 URL
+        """
+        return f"https://cn.tradingview.com/chart/U1FY2qxO/?symbol=BINANCE%3A{symbol}&interval={interval}"
 
     def _get_previous_state_from_history(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -1462,7 +1601,7 @@ class HamaBraveMonitor:
     ):
         """
         记录邮件发送日志到数据库
-        
+
         Args:
             symbol: 币种符号
             email_type: 邮件类型 (trend_notification)
@@ -1476,12 +1615,20 @@ class HamaBraveMonitor:
             recipients: 收件人
             error_message: 错误信息（如果失败）
         """
-        if not self.use_sqlite or not self.sqlite_conn:
+        if not self.use_sqlite:
             return
-        
+
         try:
-            cursor = self.sqlite_conn.cursor()
-            
+            import sqlite3
+            import os
+
+            # 每次创建新的连接，避免线程安全问题
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db')
+            db_path = os.path.abspath(db_path)
+
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
             # 插入邮件发送记录
             cursor.execute("""
                 INSERT INTO email_send_log (
@@ -1501,8 +1648,9 @@ class HamaBraveMonitor:
                 error_message,
                 screenshot_path or ''
             ))
-            
-            self.sqlite_conn.commit()
+
+            conn.commit()
+            conn.close()
             logger.info(f"✅ 邮件发送记录已保存: {symbol} - {email_type} - {'成功' if success else '失败'}")
             
         except Exception as e:

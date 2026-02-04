@@ -285,11 +285,7 @@ def init_hama_brave_monitor():
             if not symbols:
                 symbols = [
                     'BTCUSDT',
-                    'ETHUSDT',
-                    'BNBUSDT',
-                    'SOLUSDT',
-                    'DOGEUSDT',
-                    'DASHUSDT'
+                    'ETHUSDT'
                 ]
 
             logger.info(f"自动启动Brave持续监控: 币种={len(symbols)}个, 间隔={interval}秒")

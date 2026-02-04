@@ -21,8 +21,11 @@ class HamaMonitorWorker:
         self.is_running = False
         self.worker_thread = None
         self.monitor = None
-        self.symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT']
-        self.interval = 600  # 10分钟
+        # 从环境变量读取监控币种列表
+        symbols_str = os.getenv('BRAVE_MONITOR_SYMBOLS', '')
+        self.symbols = [s.strip() for s in symbols_str.split(',') if s.strip()] if symbols_str else ['ETHUSDT']
+        # 从环境变量读取监控间隔
+        self.interval = int(os.getenv('BRAVE_MONITOR_INTERVAL', '3600'))
         # 从环境变量读取浏览器类型，默认使用 brave
         self.browser_type = os.getenv('BRAVE_MONITOR_BROWSER_TYPE', 'brave')
 
@@ -61,12 +64,8 @@ class HamaMonitorWorker:
             self.is_running = False
             return
 
-        # 等待一段时间让后端完全启动
-        logger.info("⏰ 等待 30 秒后开始首次监控...")
-        for _ in range(30):
-            if not self.is_running:
-                return
-            time.sleep(1)
+        # 立即开始监控，无需等待
+        logger.info("🚀 立即开始首次监控...")
 
         # 监控循环
         round_num = 0
@@ -88,7 +87,7 @@ class HamaMonitorWorker:
                     logger.info(f"处理 {i+1}/{len(self.symbols)}: {symbol}")
 
                     try:
-                        result = self.monitor.monitor_symbol(symbol, self.browser_type)
+                        result = self.monitor.monitor_symbol(symbol, 15, self.browser_type)
 
                         if result:
                             success_count += 1
