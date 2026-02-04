@@ -458,20 +458,20 @@ class HAMAOCRExtractor:
                 except Exception as e:
                     logger.warning(f"检查 HAMA 指标失败: {e}")
 
-                # 截图 - 截取页面右下角 HAMA 信息面板（精确定位）
-                logger.info(f"截取图表右下角 HAMA 面板到: {output_path}")
+                # 截图 - 截取页面左下角 HAMA 信息面板（精确定位）
+                logger.info(f"截取图表左下角 HAMA 面板到: {output_path}")
 
                 # 获取页面尺寸
                 viewport_size = page.viewport_size
                 page_width = viewport_size['width']
                 page_height = viewport_size['height']
 
-                # 计算截图区域: HAMA 指标面板在右下角
+                # 计算截图区域: HAMA 指标面板在左下角
                 # 调整截取区域以包含完整的 HAMA 指标面板
                 clip = {
-                    'x': int(page_width * 0.65),   # 从页面 65% 处开始（右侧35%）
-                    'y': int(page_height * 0.35),  # 从页面 35% 处开始
-                    'width': int(page_width * 0.35),   # 截取右侧35%宽度
+                    'x': 0,                            # 从左侧开始
+                    'y': int(page_height * 0.35),     # 从页面 35% 处开始
+                    'width': int(page_width * 0.35),   # 截取左侧35%宽度
                     'height': int(page_height * 0.65)  # 截取底部65%高度
                 }
 

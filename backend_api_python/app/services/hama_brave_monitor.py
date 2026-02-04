@@ -400,6 +400,8 @@ class HamaBraveMonitor:
                             primary_data = timeframes[timeframe]
                             primary_data['screenshot_path'] = screenshot_path
                             primary_data['screenshot_base64'] = screenshot_base64
+                            primary_data['full_chart_path'] = row_dict.get('full_chart_path')  # 添加全屏截图路径
+                            primary_data['updated_at'] = row_dict.get('updated_at') or row_dict.get('monitored_at')
 
                     if primary_data:
                         # 构建返回数据（主周期数据在顶层，其他周期在 timeframes 字段）
@@ -412,8 +414,10 @@ class HamaBraveMonitor:
                             'bollinger_status': primary_data.get('bollinger_status'),
                             'last_cross_info': primary_data.get('last_cross_info'),
                             'screenshot_path': primary_data.get('screenshot_path'),
+                            'full_chart_path': primary_data.get('full_chart_path'),  # 添加全屏截图路径
                             'screenshot_base64': primary_data.get('screenshot_base64'),
                             'cached_at': primary_data.get('monitored_at'),
+                            'updated_at': primary_data.get('updated_at'),
                             'cache_source': 'sqlite_brave_monitor',
                             # 只保留 15m 时间周期数据
                             'timeframes': timeframes,

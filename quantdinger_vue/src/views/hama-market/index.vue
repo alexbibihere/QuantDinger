@@ -64,6 +64,8 @@
         row-key="symbol"
         :scroll="{ x: 1500 }"
         size="middle"
+        :expanded-row-keys="expandedRowKeys"
+        @expand="handleExpand"
       >
         <!-- 币种 -->
         <template slot="symbol" slot-scope="text">
@@ -76,19 +78,6 @@
             {{ formatPrice(record.hama_brave.hama_value) }}
           </span>
           <span v-else style="color: #999">-</span>
-        </template>
-
-        <!-- 15分钟周期 -->
-        <template slot="timeframe_15m" slot-scope="text, record">
-          <a-tag
-            v-if="record.hama_brave && record.hama_brave.timeframe_15m"
-            :color="getTimeframeColor(record.hama_brave.timeframe_15m.hama_color)"
-            style="font-size: 11px"
-          >
-            <a-icon :type="getTimeframeIcon(record.hama_brave.timeframe_15m.hama_trend)" />
-            {{ getTimeframeText(record.hama_brave.timeframe_15m.hama_trend) }}
-          </a-tag>
-          <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
         <!-- HAMA 状态 -->
@@ -111,26 +100,6 @@
           >
             {{ record.hama_brave.candle_ma_status }}
           </span>
-          <span v-else style="color: #999; font-size: 12px">-</span>
-        </template>
-
-        <!-- 布林带状态 -->
-        <template slot="bollinger_status" slot-scope="text, record">
-          <a-tag
-            v-if="record.hama_brave && record.hama_brave.bollinger_status"
-            :color="record.hama_brave.bollinger_status === 'squeeze' ? 'orange' : 'blue'"
-            style="font-size: 11px"
-          >
-            {{ record.hama_brave.bollinger_status === 'squeeze' ? '收缩' : record.hama_brave.bollinger_status === 'expansion' ? '扩张' : '正常' }}
-          </a-tag>
-          <span v-else style="color: #999; font-size: 12px">-</span>
-        </template>
-
-        <!-- 最近交叉 -->
-        <template slot="last_cross" slot-scope="text, record">
-          <div v-if="record.hama_brave && record.hama_brave.last_cross_info" style="font-size: 12px">
-            {{ record.hama_brave.last_cross_info }}
-          </div>
           <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
@@ -158,6 +127,22 @@
             <a-icon type="line-chart" />
             TradingView
           </a-button>
+        </template>
+
+        <!-- 展开行 - 全屏截图 -->
+        <template slot="expandedRowRender" slot-scope="record">
+          <div v-if="record.hama_brave && (record.hama_brave.full_chart_url || record.hama_brave.full_chart_path)" class="full-chart-container">
+            <div class="chart-header">
+              <span class="chart-title">{{ record.symbol }} - 全屏图表</span>
+              <span class="chart-time">{{ formatTime(record.hama_brave.updated_at) }}</span>
+            </div>
+            <img
+              :src="getFullChartUrl(record.hama_brave.full_chart_url || record.hama_brave.full_chart_path)"
+              :alt="`${record.symbol} 全屏图表`"
+              class="full-chart-image"
+            />
+          </div>
+          <a-empty v-else description="暂无全屏截图" :image-style="{ height: '60px' }" />
         </template>
       </a-table>
     </a-card>
@@ -192,7 +177,8 @@ export default {
       timer: null,
       previewVisible: false,
       previewImage: '',
-      previewTitle: ''
+      previewTitle: '',
+      expandedRowKeys: [] // 展开的行
     }
   },
   computed: {
@@ -233,13 +219,6 @@ export default {
           align: 'right'
         },
         {
-          title: '15分钟',
-          key: 'timeframe_15m',
-          scopedSlots: { customRender: 'timeframe_15m' },
-          width: 120,
-          align: 'center'
-        },
-        {
           title: '蜡烛/MA',
           key: 'candle_ma',
           scopedSlots: { customRender: 'candle_ma' },
@@ -247,17 +226,10 @@ export default {
           align: 'center'
         },
         {
-          title: '布林带状态',
-          key: 'bollinger_status',
-          scopedSlots: { customRender: 'bollinger_status' },
+          title: 'HAMA状态',
+          key: 'hama_status_display',
+          scopedSlots: { customRender: 'hama_status_display' },
           width: 120,
-          align: 'center'
-        },
-        {
-          title: '最近交叉',
-          key: 'last_cross',
-          scopedSlots: { customRender: 'last_cross' },
-          width: 180,
           align: 'center'
         },
         {
@@ -298,7 +270,13 @@ export default {
         const watchlistRes = await getHamaWatchlist({ market: 'spot' })
 
         if (watchlistRes.success || watchlistRes.data) {
-          this.watchlist = watchlistRes.data.watchlist || []
+          // 去重：使用symbol作为唯一标识符，保留最后出现的记录
+          const rawList = watchlistRes.data.watchlist || []
+          const uniqueMap = new Map()
+          rawList.forEach(item => {
+            uniqueMap.set(item.symbol, item)
+          })
+          this.watchlist = Array.from(uniqueMap.values())
           this.apiConnected = true
         } else {
           this.watchlist = []
@@ -356,6 +334,35 @@ export default {
 
     handlePreviewCancel () {
       this.previewVisible = false
+    },
+
+    handleExpand (expanded, record) {
+      if (expanded) {
+        this.expandedRowKeys = [record.symbol]
+      } else {
+        this.expandedRowKeys = []
+      }
+    },
+
+    getFullChartUrl (imagePath) {
+      if (!imagePath) return ''
+      // 如果是相对路径，转换为完整的API URL
+      if (imagePath.startsWith('/') || imagePath.startsWith('.')) {
+        return `http://localhost:5000${imagePath}`
+      }
+      // 如果是完整路径，直接返回
+      return imagePath
+    },
+
+    formatTime (timeStr) {
+      if (!timeStr) return '-'
+      const date = new Date(timeStr)
+      return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
     },
 
     // 多周期数据辅助方法
@@ -463,6 +470,49 @@ export default {
     }
     100% {
       opacity: 1;
+    }
+  }
+
+  .full-chart-container {
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 4px;
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e8e8e8;
+
+      .chart-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #262626;
+      }
+
+      .chart-time {
+        font-size: 12px;
+        color: #8c8c8c;
+      }
+    }
+
+    .full-chart-image {
+      width: 100%;
+      max-height: 600px;
+      object-fit: contain;
+      border-radius: 4px;
+      border: 1px solid #e8e8e8;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: all 0.3s;
+      display: block;
+      margin: 0 auto;
+
+      &:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      }
     }
   }
 }

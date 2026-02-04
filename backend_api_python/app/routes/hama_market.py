@@ -218,6 +218,14 @@ def get_hama_watchlist():
                         filename = os.path.basename(screenshot_path)
                         screenshot_url = f"/screenshot/{filename}"
 
+                    # 处理全屏截图路径
+                    full_chart_path = brave_hama.get('full_chart_path')
+                    full_chart_url = None
+                    if full_chart_path:
+                        # 将本地文件路径转换为 URL
+                        filename = os.path.basename(full_chart_path)
+                        full_chart_url = f"/screenshot/{filename}"
+
                     # 构造返回数据（包含多时间周期）
                     hama_brave_data = {
                         'hama_trend': brave_hama.get('hama_trend'),
@@ -228,8 +236,11 @@ def get_hama_watchlist():
                         'last_cross_info': brave_hama.get('last_cross_info'),
                         'screenshot_path': screenshot_path,
                         'screenshot_url': screenshot_url,
+                        'full_chart_path': full_chart_path,
+                        'full_chart_url': full_chart_url,
                         'screenshot_base64': brave_hama.get('screenshot_base64'),
                         'cached_at': brave_hama.get('cached_at'),
+                        'updated_at': brave_hama.get('updated_at') or brave_hama.get('cached_at'),
                         'cache_source': brave_hama.get('cache_source', 'brave_browser')
                     }
 
