@@ -1241,54 +1241,51 @@ class HamaBraveMonitor:
             price = hama_data.get('price', 0)
             cross_info = hama_data.get('last_cross_info', '')
 
-            # 从历史表查询上一次状态（而不是使用内存中的last_states）
-            last_state = self._get_previous_state_from_history(symbol)
+            # 从邮件发送日志查询最后一次发送邮件时的状态
+            last_email_state = self._get_last_sent_email_state(symbol)
 
             # 检查是否需要发送通知（趋势变化）
             should_notify = False
             cross_type = None
 
-            if last_state:
-                # 有历史记录，检查是否变化
-                last_color = last_state.get('color', '')
-                last_trend = last_state.get('trend', '')
+            if last_email_state:
+                # 有邮件发送历史，比较当前状态与最后一次发送邮件时的状态
+                last_email_color = last_email_state.get('color', '')
+                last_email_trend = last_email_state.get('trend', '')
 
-                logger.info(f"{symbol} 状态对比(历史表): 上次={last_color}, 当前={current_color}")
+                logger.info(f"{symbol} 状态对比(上次邮件状态): 上次邮件={last_email_color}, 当前={current_color}")
 
-                # 新逻辑: 只有当两个状态都非盘整且状态不同时,才触发邮件
-                # 排除盘整状态(null/empty/neutral/gray)
-                last_is_valid = last_color and last_color != '' and last_color not in ('neutral', 'gray')
-                current_is_valid = current_color and current_color != '' and current_color not in ('neutral', 'gray')
-
-                if last_is_valid and current_is_valid and last_color != current_color:
-                    # 两个状态都有效且不同,检测金叉/死叉
+                # 只要颜色发生变化就触发邮件（去除盘整状态和相同状态检查）
+                if last_email_color != current_color:
+                    # 颜色变化，检测金叉/死叉
                     if current_color == 'green':
                         should_notify = True
                         cross_type = 'cross_up'
-                        logger.info(f"✅ 检测到金叉信号: {symbol} (颜色: {last_color} → {current_color})")
+                        logger.info(f"✅ 检测到金叉信号: {symbol} (上次邮件颜色: {last_email_color} → 当前: {current_color})")
                     elif current_color == 'red':
                         should_notify = True
                         cross_type = 'cross_down'
-                        logger.info(f"✅ 检测到死叉信号: {symbol} (颜色: {last_color} → {current_color})")
-                else:
-                    # 状态相同或包含盘整状态,不发送邮件
-                    if not last_is_valid or not current_is_valid:
-                        logger.info(f"❌ {symbol} 包含盘整状态,不发送邮件 (上次={last_color}, 当前={current_color})")
+                        logger.info(f"✅ 检测到死叉信号: {symbol} (上次邮件颜色: {last_email_color} → 当前: {current_color})")
                     else:
-                        logger.info(f"❌ {symbol} 颜色未变化: {last_color} → {current_color}，不发送邮件")
+                        # 从无色/其他状态转变为 green/red 以外的状态
+                        logger.info(f"ℹ️ {symbol} 颜色变化: {last_email_color} → {current_color}，非绿/红趋势，不发送邮件")
+                else:
+                    # 状态相同，不发送邮件
+                    logger.info(f"❌ {symbol} 颜色与上次邮件相同: {last_email_color} → {current_color}，不发送邮件")
             else:
-                # 历史表中没有记录（第一次监控），发送通知
-                logger.info(f"🆕 首次监控 {symbol}（历史表无记录），当前状态: {current_color}")
-                # 如果当前状态有效（非盘整），发送首次通知
-                current_is_valid = current_color and current_color != '' and current_color not in ('neutral', 'gray')
-                if current_is_valid:
+                # 从未发送过邮件（首次邮件通知），根据当前颜色决定是否发送通知
+                logger.info(f"🆕 首次邮件通知 {symbol}（无邮件发送历史），当前状态: {current_color}")
+                # 只要是 green 或 red 状态就发送首次通知
+                if current_color == 'green':
                     should_notify = True
-                    if current_color == 'green':
-                        cross_type = 'cross_up'
-                        logger.info(f"✅ 首次监控检测到上涨趋势: {symbol} ({current_color})")
-                    elif current_color == 'red':
-                        cross_type = 'cross_down'
-                        logger.info(f"✅ 首次监控检测到下跌趋势: {symbol} ({current_color})")
+                    cross_type = 'cross_up'
+                    logger.info(f"✅ 首次邮件通知 - 检测到上涨趋势: {symbol} ({current_color})")
+                elif current_color == 'red':
+                    should_notify = True
+                    cross_type = 'cross_down'
+                    logger.info(f"✅ 首次邮件通知 - 检测到下跌趋势: {symbol} ({current_color})")
+                else:
+                    logger.info(f"ℹ️ 首次监控 {symbol} 当前状态为 {current_color}，非绿/红趋势，不发送邮件")
 
             if not should_notify:
                 return False
@@ -1542,6 +1539,53 @@ class HamaBraveMonitor:
 
         except Exception as e:
             logger.warning(f"从历史表查询上一次状态失败 {symbol}: {e}")
+            return None
+
+    def _get_last_sent_email_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        从邮件发送日志查询最后一次发送邮件时的状态
+
+        Args:
+            symbol: 币种符号
+
+        Returns:
+            {'color': ..., 'trend': ..., 'value': ..., 'sent_at': ...} 或 None
+        """
+        if not self.use_sqlite:
+            return None
+
+        try:
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db')
+            db_path = os.path.abspath(db_path)
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 查询最后一次成功发送邮件的记录
+            cursor.execute('''
+                SELECT hama_color, hama_trend, hama_value, sent_at
+                FROM email_send_log
+                WHERE symbol = ? AND status = 'success'
+                ORDER BY sent_at DESC
+                LIMIT 1
+            ''', (symbol,))
+
+            email_row = cursor.fetchone()
+            conn.close()
+
+            if email_row:
+                return {
+                    'color': email_row['hama_color'] or '',
+                    'trend': email_row['hama_trend'] or '',
+                    'value': email_row['hama_value'] or 0,
+                    'sent_at': email_row['sent_at']
+                }
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"从邮件发送日志查询最后状态失败 {symbol}: {e}")
             return None
 
     def _load_last_states_from_db(self) -> Dict[str, Dict[str, Any]]:

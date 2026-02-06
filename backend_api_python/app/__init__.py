@@ -19,6 +19,8 @@ _hama_scheduler = None
 _tv_cache_manager = None
 _tv_scheduler = None
 _hama_brave_monitor = None
+_hama_health_checker = None
+_long_logic_reader = None
 
 
 def get_trading_executor():
@@ -455,6 +457,163 @@ def stop_tv_scheduler():
             logger.error(f"停止TradingView定时任务失败: {e}")
 
 
+def get_long_logic_reader():
+    """获取 LongLogic 读取器单例"""
+    global _long_logic_reader
+    return _long_logic_reader
+
+
+def get_hama_health_checker():
+    """获取 HAMA 健康检查器单例"""
+    global _hama_health_checker
+    return _hama_health_checker
+
+
+def init_long_logic_reader():
+    """
+    初始化 LongLogic 配置读取器
+    """
+    try:
+        from app.services.long_logic_reader import get_long_logic_reader as get_reader
+        global _long_logic_reader
+        _long_logic_reader = get_reader()
+        logger.info("✅ LongLogic 配置读取器已初始化")
+        return _long_logic_reader
+    except Exception as e:
+        logger.error(f"初始化 LongLogic 读取器失败: {e}", exc_info=True)
+        return None
+
+
+def init_hama_health_checker(long_logic_reader=None):
+    """
+    初始化 HAMA 数据健康检查器
+
+    Args:
+        long_logic_reader: LongLogic 读取器实例
+    """
+    try:
+        from app.services.hama_health_checker import HAMAHealthChecker
+        import os
+
+        global _hama_health_checker
+
+        # 检查间隔（秒），默认60秒
+        check_interval = int(os.getenv('HAMA_HEALTH_CHECK_INTERVAL', '60'))
+
+        # 失败阈值，默认3次
+        failure_threshold = int(os.getenv('HAMA_HEALTH_CHECK_THRESHOLD', '3'))
+
+        _hama_health_checker = HAMAHealthChecker(
+            check_interval=check_interval,
+            failure_threshold=failure_threshold
+        )
+
+        # 设置失败回调：重新读取 longLogic.txt
+        if long_logic_reader:
+            def reload_long_logic_on_failure(symbol, check_result):
+                """HAMA 数据失败时重新加载 longLogic.txt"""
+                try:
+                    logger.info(f"🔄 触发 LongLogic 配置重载 (原因: {symbol} 数据异常)")
+                    long_logic_reader.reload_config()
+                    long_logic_reader.apply_config()
+                except Exception as e:
+                    logger.error(f"重载 LongLogic 配置失败: {e}", exc_info=True)
+
+            _hama_health_checker.set_failure_callback(reload_long_logic_on_failure)
+
+        logger.info(f"✅ HAMA 健康检查器已初始化 (间隔={check_interval}秒, 阈值={failure_threshold}次)")
+        return _hama_health_checker
+
+    except Exception as e:
+        logger.error(f"初始化 HAMA 健康检查器失败: {e}", exc_info=True)
+        return None
+
+
+def start_hama_health_checker():
+    """
+    启动 HAMA 数据健康检查（后台线程）
+    """
+    import os
+
+    # 检查是否启用健康检查
+    health_check_enabled = os.getenv('HAMA_HEALTH_CHECK_ENABLED', 'true').lower() == 'true'
+
+    if not health_check_enabled:
+        logger.info("HAMA 健康检查已禁用 (HAMA_HEALTH_CHECK_ENABLED=false)")
+        return
+
+    health_checker = get_hama_health_checker()
+    brave_monitor = get_hama_brave_monitor()
+
+    if not health_checker:
+        logger.warning("HAMA 健康检查器未初始化")
+        return
+
+    # 定义获取监控列表的函数
+    def get_watchlist_func():
+        try:
+            if brave_monitor:
+                import sqlite3
+                import os
+
+                # 从SQLite数据库获取最新的HAMA数据
+                # 数据库路径固定为 backend_api_python/data/quantdinger.db
+                db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'quantdinger.db')
+                db_path = os.path.abspath(db_path)
+
+                if not os.path.exists(db_path):
+                    logger.warning(f"数据库文件不存在: {db_path}")
+                    return []
+
+                watchlist = []
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+
+                # 查询每个币种的最新记录（使用正确的列名）
+                cursor.execute('''
+                    SELECT symbol, price, hama_trend, hama_color, monitored_at
+                    FROM hama_monitor_cache
+                    WHERE symbol IN (
+                        SELECT DISTINCT symbol FROM hama_monitor_cache
+                    )
+                    ORDER BY symbol, monitored_at DESC
+                ''')
+
+                rows = cursor.fetchall()
+
+                # 使用字典跟踪已处理的币种（只取每个币种的最新记录）
+                symbol_data = {}
+                for row in rows:
+                    symbol, price, trend, color, monitored_at = row
+                    if symbol not in symbol_data:
+                        symbol_data[symbol] = {
+                            'symbol': symbol,
+                            'current_price': price,
+                            'hama_color': color,
+                            'hama_trend': trend,
+                            'timestamp': monitored_at
+                        }
+
+                watchlist = list(symbol_data.values())
+                conn.close()
+
+                logger.debug(f"从SQLite获取到 {len(watchlist)} 个币种的监控数据")
+                return watchlist
+            else:
+                logger.warning("Brave 监控器未初始化，无法获取监控列表")
+                return []
+        except Exception as e:
+            logger.error(f"获取监控列表失败: {e}", exc_info=True)
+            return []
+
+    # 启动健康检查
+    try:
+        health_checker.start(get_watchlist_func)
+        logger.info("✅ HAMA 健康检查已启动 (后台轮询)")
+    except Exception as e:
+        logger.error(f"启动 HAMA 健康检查失败: {e}", exc_info=True)
+
+
 def create_app(config_name='default'):
     """
     Flask application factory.
@@ -554,7 +713,14 @@ def create_app(config_name='default'):
         start_reflection_worker()
         restore_running_strategies()
 
-        # 7. 启动截图缓存 Worker (已暂停)
+        # 7. 初始化 LongLogic 配置读取器
+        _long_logic_reader = init_long_logic_reader()
+
+        # 8. 初始化并启动 HAMA 健康检查（自动重载 longLogic.txt）
+        _hama_health_checker = init_hama_health_checker(long_logic_reader=_long_logic_reader)
+        start_hama_health_checker()
+
+        # 9. 启动截图缓存 Worker (已暂停)
         try:
             logger.info("⏸️  截图缓存 Worker 已禁用 (如需启用，请取消注释)")
             # from app.routes.tradingview_scanner import start_screenshot_worker
