@@ -419,6 +419,7 @@ class HamaBraveMonitor:
                             'candle_ma_status': row_dict.get('candle_ma_status'),
                             'bollinger_status': row_dict.get('bollinger_status'),
                             'last_cross_info': row_dict.get('last_cross_info'),
+                            'last_cross_time': row_dict.get('last_cross_time'),  # 新增：最近交叉时间
                             'monitored_at': row_dict.get('monitored_at')
                         }
 
@@ -440,6 +441,7 @@ class HamaBraveMonitor:
                             'candle_ma_status': primary_data.get('candle_ma_status'),
                             'bollinger_status': primary_data.get('bollinger_status'),
                             'last_cross_info': primary_data.get('last_cross_info'),
+                            'last_cross_time': primary_data.get('last_cross_time'),  # 新增：最近交叉时间
                             'screenshot_path': primary_data.get('screenshot_path'),
                             'full_chart_path': primary_data.get('full_chart_path'),  # 添加全屏截图路径
                             'screenshot_base64': primary_data.get('screenshot_base64'),
