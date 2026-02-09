@@ -991,11 +991,37 @@ class HAMAOCRExtractor:
             r'Last\s*Cross\s*[:：]?\s*([^\n]+)',
         ]
 
+        last_cross_time = None  # 新增：交叉时间
         for pattern in cross_patterns:
             matches = re.findall(pattern, line_text)  # 使用行文本保留换行
             if matches:
                 last_cross_info = matches[0].strip()
                 logger.debug(f"识别最近交叉: {last_cross_info}")
+
+                # 从交叉信息中提取时间（多种格式）
+                # 格式1: "X小时前" (如 3小时前)
+                time_ago_match = re.search(r'(\d+)\s*[小时h]\s*[前ago]', last_cross_info, re.IGNORECASE)
+                if time_ago_match:
+                    hours_ago = int(time_ago_match.group(1))
+                    # 计算具体时间
+                    from datetime import datetime, timedelta
+                    cross_time = datetime.now() - timedelta(hours=hours_ago)
+                    last_cross_time = cross_time.strftime("%Y-%m-%d %H:%M:%S")
+                    logger.info(f"✅ 提取交叉时间: {last_cross_time} ({hours_ago}小时前)")
+                else:
+                    # 格式2: "YYYY-MM-DD HH:MM"
+                    datetime_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})', last_cross_info)
+                    if datetime_match:
+                        last_cross_time = datetime_match.group(1)
+                        logger.info(f"✅ 提取交叉时间: {last_cross_time}")
+                    else:
+                        # 格式3: "MM-DD HH:MM" (如 02-09 10:30)
+                        short_datetime_match = re.search(r'(\d{2}-\d{2}\s+\d{2}:\d{2})', last_cross_info)
+                        if short_datetime_match:
+                            # 补全年份
+                            current_year = datetime.now().year
+                            last_cross_time = f"{current_year}-{short_datetime_match.group(1)}"
+                            logger.info(f"✅ 提取交叉时间: {last_cross_time}")
 
                 # 从交叉信息中提取信号（涨/跌）
                 if '涨' in last_cross_info or 'up' in last_cross_info.lower():
@@ -1033,6 +1059,7 @@ class HAMAOCRExtractor:
             'bollinger_status': bollinger_status,
             'candle_ma_status': candle_ma_status,  # 蜡烛/MA 状态
             'last_cross_info': last_cross_info,
+            'last_cross_time': last_cross_time,  # 新增：最近交叉时间
             'hama_status': f"{trend}_trend",  # 兼容旧格式
             'ocr_engine': self.ocr_engine,
             'confidence': 'high',  # 右下角面板结构化文本，置信度高

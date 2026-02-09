@@ -194,6 +194,7 @@ class HamaBraveMonitor:
                         candle_ma_status TEXT,
                         bollinger_status TEXT,
                         last_cross_info TEXT,
+                        last_cross_time VARCHAR(50),
                         email_sent INTEGER DEFAULT 0,
                         email_sent_at TIMESTAMP NULL,
                         monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -261,6 +262,7 @@ class HamaBraveMonitor:
                     candle_ma_status TEXT,
                     bollinger_status TEXT,
                     last_cross_info TEXT,
+                    last_cross_time VARCHAR(50),
                     monitored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -296,6 +298,31 @@ class HamaBraveMonitor:
                         logger.info("✅ 历史表已添加 full_chart_path 字段")
                     except Exception as e:
                         logger.warning(f"添加历史表字段失败: {e}")
+
+                # 检查并添加 last_cross_time 字段
+                if 'last_cross_time' not in history_columns:
+                    logger.info("检测到历史表缺少 last_cross_time 字段，正在添加...")
+                    try:
+                        cursor.execute('ALTER TABLE hama_monitor_history ADD COLUMN last_cross_time VARCHAR(50)')
+                        logger.info("✅ 历史表已添加 last_cross_time 字段")
+                    except Exception as e:
+                        logger.warning(f"添加历史表字段失败: {e}")
+
+            # 检查缓存表是否需要添加 last_cross_time 字段
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hama_monitor_cache'")
+            cache_table_exists = cursor.fetchone() is not None
+
+            if cache_table_exists:
+                cursor.execute("PRAGMA table_info(hama_monitor_cache)")
+                cache_columns = [row[1] for row in cursor.fetchall()]
+
+                if 'last_cross_time' not in cache_columns:
+                    logger.info("检测到缓存表缺少 last_cross_time 字段，正在添加...")
+                    try:
+                        cursor.execute('ALTER TABLE hama_monitor_cache ADD COLUMN last_cross_time VARCHAR(50)')
+                        logger.info("✅ 缓存表已添加 last_cross_time 字段")
+                    except Exception as e:
+                        logger.warning(f"添加缓存表字段失败: {e}")
 
             # 提交更改
             self.sqlite_conn.commit()
@@ -508,8 +535,8 @@ class HamaBraveMonitor:
                 cursor.execute('''
                     INSERT OR REPLACE INTO hama_monitor_cache
                     (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, full_chart_path,
-                     candle_ma_status, bollinger_status, last_cross_info, monitored_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     candle_ma_status, bollinger_status, last_cross_info, last_cross_time, monitored_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     timeframe,
@@ -523,6 +550,7 @@ class HamaBraveMonitor:
                     hama_data.get('candle_ma_status', ''),
                     hama_data.get('bollinger_status', ''),
                     hama_data.get('last_cross_info', ''),
+                    hama_data.get('last_cross_time', ''),  # 新增：最近交叉时间
                     current_time
                 ))
 
@@ -530,8 +558,8 @@ class HamaBraveMonitor:
                 cursor.execute('''
                     INSERT INTO hama_monitor_history
                     (symbol, timeframe, hama_trend, hama_color, hama_value, price, ocr_text, screenshot_path, full_chart_path,
-                     candle_ma_status, bollinger_status, last_cross_info, monitored_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     candle_ma_status, bollinger_status, last_cross_info, last_cross_time, monitored_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     timeframe,
@@ -545,6 +573,7 @@ class HamaBraveMonitor:
                     hama_data.get('candle_ma_status', ''),
                     hama_data.get('bollinger_status', ''),
                     hama_data.get('last_cross_info', ''),
+                    hama_data.get('last_cross_time', ''),  # 新增：最近交叉时间
                     current_time
                 ))
 
@@ -1348,6 +1377,7 @@ class HamaBraveMonitor:
             # 准备额外数据（包含多时间周期）
             extra_data = {
                 'cross_info': cross_info,
+                'last_cross_time': hama_data.get('last_cross_time', ''),  # 新增：最近交叉时间
                 'candle_ma_status': hama_data.get('candle_ma_status', ''),
                 'bollinger_status': hama_data.get('bollinger_status', '')
             }

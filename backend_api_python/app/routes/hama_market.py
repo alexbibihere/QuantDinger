@@ -234,6 +234,7 @@ def get_hama_watchlist():
                         'candle_ma_status': brave_hama.get('candle_ma_status'),
                         'bollinger_status': brave_hama.get('bollinger_status'),
                         'last_cross_info': brave_hama.get('last_cross_info'),
+                        'last_cross_time': brave_hama.get('last_cross_time'),  # 新增：最近交叉时间
                         'screenshot_path': screenshot_path,
                         'screenshot_url': screenshot_url,
                         'full_chart_path': full_chart_path,
@@ -2152,7 +2153,7 @@ def get_hama_history(symbol):
             # 查询历史记录
             cursor.execute('''
                 SELECT hama_trend, hama_color, hama_value, price,
-                       candle_ma_status, bollinger_status, last_cross_info,
+                       candle_ma_status, bollinger_status, last_cross_info, last_cross_time,
                        monitored_at
                 FROM hama_monitor_history
                 WHERE symbol = ?
@@ -2171,6 +2172,7 @@ def get_hama_history(symbol):
                     'candle_ma_status': row['candle_ma_status'],
                     'bollinger_status': row['bollinger_status'],
                     'last_cross_info': row['last_cross_info'],
+                    'last_cross_time': row['last_cross_time'],  # 新增：最近交叉时间
                     'monitored_at': row['monitored_at']
                 })
 

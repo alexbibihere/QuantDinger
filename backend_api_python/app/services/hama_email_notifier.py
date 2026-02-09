@@ -250,10 +250,19 @@ class HamaEmailNotifier:
 
         # 额外数据
         if extra_data:
+            # 提取并突出显示交叉时间
+            last_cross_time = extra_data.get('last_cross_time') or extra_data.get('cross_info', '')
+
             text_lines.append("")
             text_lines.append("=== 额外信息 ===")
+
+            # 优先显示交叉时间
+            if last_cross_time:
+                text_lines.append(f"最近交叉时间: {last_cross_time}")
+
+            # 显示其他额外数据（排除已处理的字段）
             for key, value in extra_data.items():
-                if value is not None:
+                if key not in ['last_cross_time', 'cross_info', 'timeframes'] and value is not None:
                     text_lines.append(f"{key}: {value}")
 
         # 截图链接
