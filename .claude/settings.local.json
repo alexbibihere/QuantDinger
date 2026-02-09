@@ -103,7 +103,8 @@
       "Bash(netsh:*)",
       "Bash(reg query:*)",
       "Bash(py:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(git rm:*)"
     ]
   }
 }

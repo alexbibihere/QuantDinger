@@ -70,7 +70,8 @@ class HAMAHealthChecker:
 
         for item in watchlist:
             symbol = item.get('symbol', '')
-            price = item.get('current_price')
+            # 支持多种字段名（price 或 current_price）
+            price = item.get('price') or item.get('current_price')
             status = item.get('hama_color') or item.get('hama_trend')
 
             # 检查价格是否存在且有效
