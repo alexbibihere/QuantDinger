@@ -987,8 +987,11 @@ class HAMAOCRExtractor:
                 break
 
         # 4. 查找最近交叉信息（"最近交叉" 标签后的文本）
+        # 添加模糊匹配以处理OCR识别错误（如：叉 → 史, 叉 → X 等）
         cross_patterns = [
             r'最近交叉\s*[:：]?\s*([^\n]+)',
+            r'最近交[史X又义叉]\s*[:：]?\s*([^\n]+)',  # 模糊匹配：处理OCR错误
+            r'最近交[史X又义叉]\s*([^\n]*)',  # 最宽松：捕获剩余内容
             r'Last\s*Cross\s*[:：]?\s*([^\n]+)',
         ]
 
@@ -1023,6 +1026,26 @@ class HAMAOCRExtractor:
                             current_year = datetime.now().year
                             last_cross_time = f"{current_year}-{short_datetime_match.group(1)}"
                             logger.info(f"✅ 提取交叉时间: {last_cross_time}")
+                        else:
+                            # 格式4: "HH:MM" (如 10:30)
+                            time_only_match = re.search(r'(\d{1,2}:\d{2})', last_cross_info)
+                            if time_only_match:
+                                # 只提取时间，使用今天的日期
+                                from datetime import datetime
+                                current_date = datetime.now().strftime("%Y-%m-%d")
+                                last_cross_time = f"{current_date} {time_only_match.group(1)}"
+                                logger.info(f"✅ 提取交叉时间: {last_cross_time} (仅时间)")
+                            else:
+                                # 格式5: 括号中的时间 (2262900:00)
+                                paren_time_match = re.search(r'\((\d+:\d+)\)', last_cross_info)
+                                if paren_time_match:
+                                    from datetime import datetime
+                                    current_date = datetime.now().strftime("%Y-%m-%d")
+                                    last_cross_time = f"{current_date} {paren_time_match.group(1)}"
+                                    logger.info(f"✅ 提取交叉时间: {last_cross_time} (括号格式)")
+                                else:
+                                    # 如果无法提取时间，记录原始信息
+                                    logger.debug(f"无法从交叉信息中提取时间: {last_cross_info}")
 
                 # 从交叉信息中提取信号（涨/跌）
                 if '涨' in last_cross_info or 'up' in last_cross_info.lower():
