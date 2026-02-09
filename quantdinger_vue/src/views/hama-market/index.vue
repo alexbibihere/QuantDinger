@@ -103,6 +103,18 @@
           <span v-else style="color: #999; font-size: 12px">-</span>
         </template>
 
+        <!-- 最近交叉 -->
+        <template slot="last_cross_time" slot-scope="text, record">
+          <span
+            v-if="record.hama_brave && record.hama_brave.last_cross_time"
+            style="font-size: 12px; color: #1890ff;"
+          >
+            <a-icon type="clock-circle" />
+            {{ formatCrossTime(record.hama_brave.last_cross_time) }}
+          </span>
+          <span v-else style="color: #999; font-size: 12px">-</span>
+        </template>
+
         <!-- HAMA截图 -->
         <template slot="screenshot" slot-scope="text, record">
           <div v-if="record.hama_brave && record.hama_brave.screenshot_base64" class="screenshot-container">
@@ -226,6 +238,13 @@ export default {
           align: 'center'
         },
         {
+          title: '最近交叉',
+          key: 'last_cross_time',
+          scopedSlots: { customRender: 'last_cross_time' },
+          width: 180,
+          align: 'center'
+        },
+        {
           title: 'HAMA状态',
           key: 'hama_status_display',
           scopedSlots: { customRender: 'hama_status_display' },
@@ -297,6 +316,34 @@ export default {
       if (numPrice < 0.01) return numPrice.toFixed(6)
       if (numPrice < 1) return numPrice.toFixed(4)
       return numPrice.toFixed(2)
+    },
+
+    formatCrossTime (timeStr) {
+      if (!timeStr) return '-'
+      try {
+        const date = new Date(timeStr)
+        const now = new Date()
+        const diffMs = now - date
+        const diffMins = Math.floor(diffMs / 60000)
+        const diffHours = Math.floor(diffMins / 60)
+        const diffDays = Math.floor(diffHours / 24)
+
+        if (diffMins < 1) {
+          return '刚刚'
+        } else if (diffMins < 60) {
+          return `${diffMins}分钟前`
+        } else if (diffHours < 24) {
+          return `${diffHours}小时前`
+        } else if (diffDays < 7) {
+          return `${diffDays}天前`
+        } else {
+          // 超过7天显示具体日期
+          return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+        }
+      } catch (e) {
+        console.error('格式化交叉时间失败:', e)
+        return timeStr
+      }
     },
 
     getTrendColor (hama) {
