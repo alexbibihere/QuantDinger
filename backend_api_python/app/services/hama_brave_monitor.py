@@ -467,6 +467,68 @@ class HamaBraveMonitor:
 
         return None
 
+    def _calculate_last_cross_time(self, symbol: str, current_color: str) -> Optional[str]:
+        """
+        从历史数据计算最近交叉时间
+
+        Args:
+            symbol: 币种符号
+            current_color: 当前HAMA颜色 (green/red)
+
+        Returns:
+            最近交叉时间字符串 (YYYY-MM-DD HH:MM:SS) 或 None
+        """
+        try:
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db')
+            db_path = os.path.abspath(db_path)
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 查询最近的历史记录，找到最后一次趋势变化
+            cursor.execute('''
+                SELECT hama_color, monitored_at
+                FROM hama_monitor_history
+                WHERE symbol = ?
+                ORDER BY monitored_at DESC
+                LIMIT 50
+            ''', (symbol,))
+
+            rows = cursor.fetchall()
+            conn.close()
+
+            if not rows or len(rows) < 2:
+                return None
+
+            # 找到最后一次趋势变化
+            for i in range(len(rows) - 1):
+                current_row = rows[i]
+                next_row = rows[i + 1]
+
+                # 如果趋势颜色发生了变化，这就是交叉点
+                if current_row['hama_color'] != next_row['hama_color']:
+                    cross_time = current_row['monitored_at']
+                    logger.info(f"✅ 计算最近交叉时间: {cross_time} (从 {next_row['hama_color']} → {current_row['hama_color']})")
+
+                    # 格式化时间字符串
+                    if isinstance(cross_time, str):
+                        return cross_time
+                    else:
+                        return cross_time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # 如果没有找到趋势变化，返回最早记录的时间
+            earliest_time = rows[-1]['monitored_at']
+            logger.info(f"✅ 未找到趋势变化，使用最早记录时间: {earliest_time}")
+            if isinstance(earliest_time, str):
+                return earliest_time
+            else:
+                return earliest_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        except Exception as e:
+            logger.warning(f"计算最近交叉时间失败: {e}")
+            return None
+
     def set_cached_hama(self, symbol: str, hama_data: Dict[str, Any]) -> bool:
         """
         保存 HAMA 数据到缓存 (SQLite + Redis)
@@ -520,6 +582,15 @@ class HamaBraveMonitor:
         # 保存到 SQLite (每次创建新连接)
         if self.use_sqlite:
             try:
+                # 如果OCR没有提取到最近交叉时间，从历史数据计算
+                if not hama_data.get('last_cross_time') and hama_data.get('hama_color'):
+                    calculated_cross_time = self._calculate_last_cross_time(
+                        symbol,
+                        hama_data.get('hama_color')
+                    )
+                    if calculated_cross_time:
+                        hama_data['last_cross_time'] = calculated_cross_time
+                        hama_data['last_cross_info'] = f"从历史数据计算: {calculated_cross_time}"
                 # 数据库路径
                 db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'quantdinger.db')
                 db_path = os.path.abspath(db_path)
