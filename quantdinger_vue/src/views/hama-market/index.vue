@@ -322,24 +322,14 @@ export default {
       if (!timeStr) return '-'
       try {
         const date = new Date(timeStr)
-        const now = new Date()
-        const diffMs = now - date
-        const diffMins = Math.floor(diffMs / 60000)
-        const diffHours = Math.floor(diffMins / 60)
-        const diffDays = Math.floor(diffHours / 24)
 
-        if (diffMins < 1) {
-          return '刚刚'
-        } else if (diffMins < 60) {
-          return `${diffMins}分钟前`
-        } else if (diffHours < 24) {
-          return `${diffHours}小时前`
-        } else if (diffDays < 7) {
-          return `${diffDays}天前`
-        } else {
-          // 超过7天显示具体日期
-          return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
-        }
+        // 格式化为 MM-DD HH:mm
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+
+        return `${month}-${day} ${hours}:${minutes}`
       } catch (e) {
         console.error('格式化交叉时间失败:', e)
         return timeStr
