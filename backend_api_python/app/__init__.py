@@ -508,18 +508,36 @@ def init_hama_health_checker(long_logic_reader=None):
             failure_threshold=failure_threshold
         )
 
-        # 设置失败回调：重新读取 longLogic.txt
+        # 设置失败回调：重新读取 longLogic.txt 并重启监控 Worker
         if long_logic_reader:
-            def reload_long_logic_on_failure(symbol, check_result):
-                """HAMA 数据失败时重新加载 longLogic.txt"""
+            def restart_long_logic_on_failure(symbol, check_result):
+                """HAMA 数据失败时重新加载 longLogic.txt 并重启监控 Worker"""
                 try:
                     logger.info(f"🔄 触发 LongLogic 配置重载 (原因: {symbol} 数据异常)")
                     long_logic_reader.reload_config()
                     long_logic_reader.apply_config()
+
+                    # 重启 HAMA 监控 Worker（longLogic.txt line 27 要求）
+                    try:
+                        from app.services.hama_monitor_worker import get_hama_monitor_worker
+                        worker = get_hama_monitor_worker()
+
+                        if worker.is_running:
+                            logger.info("🛑 停止当前监控 Worker...")
+                            worker.stop()
+                            logger.info("✅ 监控 Worker 已停止")
+
+                        logger.info("🚀 重新启动监控 Worker...")
+                        worker.start()
+                        logger.info("✅ 监控 Worker 已重启")
+
+                    except Exception as worker_error:
+                        logger.error(f"重启监控 Worker 失败: {worker_error}", exc_info=True)
+
                 except Exception as e:
                     logger.error(f"重载 LongLogic 配置失败: {e}", exc_info=True)
 
-            _hama_health_checker.set_failure_callback(reload_long_logic_on_failure)
+            _hama_health_checker.set_failure_callback(restart_long_logic_on_failure)
 
         logger.info(f"✅ HAMA 健康检查器已初始化 (间隔={check_interval}秒, 阈值={failure_threshold}次)")
         return _hama_health_checker
