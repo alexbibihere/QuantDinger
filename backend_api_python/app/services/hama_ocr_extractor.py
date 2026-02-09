@@ -150,6 +150,7 @@ class HAMAOCRExtractor:
                 from rapidocr_onnxruntime import RapidOCR
                 logger.info("正在初始化 RapidOCR...")
 
+                # 初始化时指定中文参数，提高中文字符识别率
                 self.ocr = RapidOCR()
                 logger.info("✅ RapidOCR 初始化成功")
             except ImportError:
@@ -467,12 +468,12 @@ class HAMAOCRExtractor:
                 page_height = viewport_size['height']
 
                 # 计算截图区域: HAMA 指标面板在左下角
-                # 调整截取区域以包含完整的 HAMA 指标面板
+                # 调整截取区域以包含完整的 HAMA 指标面板（包括最近交叉时间）
                 clip = {
                     'x': 0,                            # 从左侧开始
-                    'y': int(page_height * 0.35),     # 从页面 35% 处开始
-                    'width': int(page_width * 0.35),   # 截取左侧35%宽度
-                    'height': int(page_height * 0.65)  # 截取底部65%高度
+                    'y': int(page_height * 0.25),     # 从页面 25% 处开始（向上扩展以确保捕获完整面板）
+                    'width': int(page_width * 0.40),   # 截取左侧40%宽度（增加宽度）
+                    'height': int(page_height * 0.75)  # 截取底部75%高度（增加高度）
                 }
 
                 logger.info(f"页面尺寸: {page_width}x{page_height}, 截图区域: x={clip['x']}, y={clip['y']}, width={clip['width']}, height={clip['height']}")
