@@ -513,10 +513,10 @@ class HamaBraveMonitor:
                 ''', (
                     symbol,
                     timeframe,
-                    hama_data.get('trend'),
-                    hama_data.get('color'),  # 注意：OCR返回的是 'color' 不是 'hama_color'
+                    hama_data.get('hama_trend') or hama_data.get('trend'),  # 优先使用 hama_trend
+                    hama_data.get('hama_color') or hama_data.get('color'),    # 优先使用 hama_color
                     hama_data.get('hama_value'),
-                    hama_data.get('price'),
+                    hama_data.get('current_price') or hama_data.get('price'),  # 优先使用 current_price
                     hama_data.get('ocr_text', ''),
                     hama_data.get('screenshot_path', ''),
                     hama_data.get('full_chart_path', ''),
@@ -535,10 +535,10 @@ class HamaBraveMonitor:
                 ''', (
                     symbol,
                     timeframe,
-                    hama_data.get('trend'),
-                    hama_data.get('color'),
+                    hama_data.get('hama_trend') or hama_data.get('trend'),  # 优先使用 hama_trend
+                    hama_data.get('hama_color') or hama_data.get('color'),    # 优先使用 hama_color
                     hama_data.get('hama_value'),
-                    hama_data.get('price'),
+                    hama_data.get('current_price') or hama_data.get('price'),  # 优先使用 current_price
                     hama_data.get('ocr_text', ''),
                     hama_data.get('screenshot_path', ''),
                     hama_data.get('full_chart_path', ''),
