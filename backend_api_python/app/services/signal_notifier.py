@@ -115,6 +115,21 @@ class SignalNotifier:
         self.webhook_token = (os.getenv("SIGNAL_WEBHOOK_TOKEN") or "").strip()
 
         self.telegram_token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+        self.telegram_chat_ids = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+
+        # Telegram 代理配置
+        proxy_url = os.getenv("PROXY_URL", "").strip()
+        proxy_host = os.getenv("PROXY_HOST", "127.0.0.1").strip()
+        proxy_port = os.getenv("PROXY_PORT", "7890").strip()
+        proxy_scheme = os.getenv("PROXY_SCHEME", "socks5h").strip()
+        if not proxy_url:
+            proxy_url = f"{proxy_scheme}://{proxy_host}:{proxy_port}"
+        self.telegram_proxies = {}
+        if proxy_url and ("socks" in proxy_url or "http" in proxy_url):
+            self.telegram_proxies = {
+                "http": proxy_url,
+                "https": proxy_url,
+            }
 
         self.smtp_host = (os.getenv("SMTP_HOST") or "").strip()
         try:
@@ -667,6 +682,7 @@ class SignalNotifier:
             resp = requests.post(
                 url,
                 data=data,
+                proxies=self.telegram_proxies if self.telegram_proxies else None,
                 timeout=self.timeout_sec,
             )
             if 200 <= resp.status_code < 300:
@@ -678,38 +694,29 @@ class SignalNotifier:
     def _notify_email(self, *, to_email: str, subject: str, body_text: str, body_html: str = "") -> Tuple[bool, str]:
         if not to_email:
             return False, "missing_email_target"
-        if not self.smtp_host:
-            return False, "missing_SMTP_HOST"
-        if not self.smtp_from:
-            return False, "missing_SMTP_FROM"
-
-        msg = EmailMessage()
-        msg["From"] = self.smtp_from
-        msg["To"] = to_email
-        msg["Subject"] = str(subject or "Signal")
-        msg.set_content(str(body_text or ""))
-        if (body_html or "").strip():
-            msg.add_alternative(str(body_html or ""), subtype="html")
-
+        if not (self.smtp_host and self.smtp_user and self.smtp_password):
+            return False, "missing_smtp_config"
         try:
-            # Heuristic: if port is 465 and SMTP_USE_SSL is not explicitly set, assume SSL.
-            use_ssl = bool(self.smtp_use_ssl) or int(self.smtp_port or 0) == 465
-            if use_ssl:
-                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=self.timeout_sec) as server:
-                    server.ehlo()
-                    if self.smtp_user and self.smtp_password:
-                        server.login(self.smtp_user, self.smtp_password)
+            msg = MIMEMultipart("alternative")
+            msg["From"] = self.smtp_from
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body_text, "plain", "utf-8"))
+            if body_html:
+                msg.attach(MIMEText(body_html, "html", "utf-8"))
+            if self.smtp_use_ssl:
+                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=15) as server:
+                    server.login(self.smtp_user, self.smtp_password)
                     server.send_message(msg)
             else:
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=self.timeout_sec) as server:
-                    server.ehlo()
+                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=15) as server:
                     if self.smtp_use_tls:
                         server.starttls()
-                        server.ehlo()
-                    if self.smtp_user and self.smtp_password:
-                        server.login(self.smtp_user, self.smtp_password)
+                    server.login(self.smtp_user, self.smtp_password)
                     server.send_message(msg)
             return True, ""
+        except smtplib.SMTPAuthenticationError:
+            return False, "smtp_auth_failed"
         except Exception as e:
             return False, str(e)
 

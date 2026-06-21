@@ -79,12 +79,33 @@ export const asyncRouterMap = [
         component: () => import('@/views/hama-market'),
         meta: { title: 'menu.hamaMarket', keepAlive: true, icon: 'line-chart', permission: ['dashboard'] }
       },
+      // 合约涨幅榜
+      {
+        path: '/futures-gainers',
+        name: 'FuturesGainers',
+        component: () => import('@/views/futures-gainers'),
+        meta: { title: 'menu.futuresGainers', keepAlive: true, icon: 'rocket', permission: ['dashboard'] }
+      },
+      // 链上聪明钱
+      {
+        path: '/chain-smart-money',
+        name: 'ChainSmartMoney',
+        component: () => import('@/views/chain-smart-money'),
+        meta: { title: 'menu.chainSmartMoney', keepAlive: true, icon: 'bulb', permission: ['dashboard'] }
+      },
       // TradingView HAMA 图表测试
       {
         path: '/tv-hama-test',
         name: 'TvHamaTest',
         component: () => import('@/views/tv-hama-test'),
         meta: { title: 'menu.tvHamaTest', keepAlive: true, icon: 'experiment', permission: ['dashboard'] }
+      },
+      // 呱呱选币
+      {
+        path: '/guagua-signal',
+        name: 'GuaguaSignal',
+        component: () => import('@/views/guagua-signal'),
+        meta: { title: 'menu.guaguaSignal', keepAlive: true, icon: 'thunderbolt', permission: ['dashboard'] }
       },
       // 系统设置
       {

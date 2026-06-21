@@ -154,6 +154,16 @@ CONFIG_SCHEMA = {
             {'key': 'TIINGO_TIMEOUT', 'label': 'Tiingo超时(秒)', 'type': 'number', 'default': '10'},
         ]
     },
+    'guagua': {
+        'title': '呱呱选币配置',
+        'items': [
+            {'key': 'GUAGUA_ENABLED', 'label': '启用呱呱选币', 'type': 'boolean', 'default': 'True'},
+            {'key': 'GUAGUA_EMAIL', 'label': '呱呱选币邮箱', 'type': 'text', 'default': '', 'placeholder': '2601732014@qq.com'},
+            {'key': 'GUAGUA_PASSWORD', 'label': '呱呱选币密码', 'type': 'password', 'default': '', 'placeholder': 'a8263454..'},
+            {'key': 'GUAGUA_BASE_URL', 'label': '呱呱选币API地址', 'type': 'text', 'default': 'https://ai.yss-signal.com'},
+            {'key': 'GUAGUA_CACHE_TTL', 'label': '数据缓存时间(秒)', 'type': 'number', 'default': '30'},
+        ]
+    },
     'search': {
         'title': '搜索配置',
         'items': [

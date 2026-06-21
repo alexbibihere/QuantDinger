@@ -1,0 +1,68 @@
+========================================
+ 每日自动任务汇总
+========================================
+
+------------------------------------------------------
+ 任务1: xcat3.com 每日签到
+------------------------------------------------------
+
+网站: https://xcat3.com
+账号: 329731984@qq.com
+密码: q8263454
+
+签到方式:
+  POST https://xcat3.com/user/checkin
+  Headers:
+    X-Requested-With: XMLHttpRequest
+    Referer: https://xcat3.com/user
+    User-Agent: Mozilla/5.0
+
+  成功返回: {"ret":1,"msg":"获得了 xxx MB流量.","traffic":"xxx"}
+  已签到返回: {"ret":0,"msg":"您似乎已经签到过了..."}
+  Cookie过期: 302 重定向到 /auth/login
+
+登录方式（获取cookie）:
+  POST https://xcat3.com/auth/login
+  参数:
+    email: 329731984@qq.com
+    passwd: q8263454
+    token: （从页面获取）
+    geetest_challenge/geetest_validate/geetest_seccode: （极验验证码结果）
+  登录页有极验(GeeTest)滑动验证码，需要在浏览器中手动完成。
+
+脚本位置: /home/wisig/.hermes/scripts/xcat3_checkin.py
+Cookie文件: /home/wisig/.hermes/scripts/xcat3_cookies.json
+
+定时任务:
+  cronjob: xcat3每日签到
+  时间: 每天早上 8:00
+  模式: no_agent, 代理 http://127.0.0.1:7890
+
+Cookie过期后更新:
+  1. playwright 打开浏览器手动登录
+  2. cookie 自动保存到 xcat3_cookies.json
+
+------------------------------------------------------
+ 任务2: Free Mellow 订阅链接更新
+------------------------------------------------------
+
+网站: https://freemellow.github.io
+说明: 每天抓取最新文章页面的 Clash/V2ray/Sing-Box 订阅链接
+
+脚本位置: /home/wisig/.hermes/scripts/freemellow_fetch.py
+输出文件: /mnt/c/project/github/QuantDinger-1/docs/file/clashSubscribe.txt
+
+定时任务:
+  cronjob: freemellow订阅更新
+  时间: 每天早上 9:00
+  模式: no_agent, 代理 http://127.0.0.1:7892 (V2RayN)
+
+------------------------------------------------------
+ Hermes cronjob 管理命令
+------------------------------------------------------
+
+  查看所有任务:  cronjob action=list
+  暂停任务:      cronjob action=pause job_id=xxx
+  恢复任务:      cronjob action=resume job_id=xxx
+  删除任务:      cronjob action=remove job_id=xxx
+  手动执行:      cronjob action=run job_id=xxx

@@ -230,7 +230,8 @@ class MultiExchangeGainerService:
     def compare_exchanges(
         self,
         market: str = 'futures',
-        limit: int = 10
+        limit: int = 10,
+        with_hama: bool = False  # 默认False，延迟加载
     ) -> Dict[str, Any]:
         """
         对比多个交易所的涨幅榜数据
@@ -238,11 +239,12 @@ class MultiExchangeGainerService:
         Args:
             market: 市场类型 'spot' 或 'futures'
             limit: 返回数量
+            with_hama: 是否包含HAMA指标数据（默认False，按需加载）
 
         Returns:
             包含多个交易所数据和对比分析的字典
         """
-        logger.info(f"Comparing exchanges for {market} market, top {limit}")
+        logger.info(f"Comparing exchanges for {market} market, top {limit}, hama={with_hama}")
 
         # 获取各交易所数据
         binance_data = (
@@ -256,6 +258,35 @@ class MultiExchangeGainerService:
             if market == 'futures'
             else self.get_okx_spot_gainers(limit)
         )
+
+        # 计算HAMA指标（仅Binance币种）
+        hama_data = {}
+        if with_hama and binance_data:
+            try:
+                from app.services.hama_binance_calculator import get_hama_calculator
+                symbols = [item['symbol'] for item in binance_data]
+                calculator = get_hama_calculator(use_futures=(market == 'futures'))
+                hama_data = calculator.calculate_batch(symbols, interval='15m', max_workers=5)
+                logger.info(f"计算了 {len(hama_data)} 个币种的HAMA指标")
+
+                # 将HAMA数据合并到binance_data中
+                for item in binance_data:
+                    symbol = item['symbol']
+                    if symbol in hama_data:
+                        item['hama'] = {
+                            'color': hama_data[symbol].get('hama_color'),
+                            'trend': hama_data[symbol].get('hama_trend'),
+                            'candle_close': hama_data[symbol].get('candle_close'),
+                            'ma': hama_data[symbol].get('ma'),
+                            'candle_ma_status': hama_data[symbol].get('candle_ma_status'),
+                            'bb_status': hama_data[symbol].get('bb_status'),
+                            'bb_upper': hama_data[symbol].get('bb_upper'),
+                            'bb_lower': hama_data[symbol].get('bb_lower'),
+                            'last_cross_type': hama_data[symbol].get('last_cross_type'),
+                            'last_cross_time': hama_data[symbol].get('last_cross_time')
+                        }
+            except Exception as e:
+                logger.error(f"计算HAMA失败: {e}")
 
         # 分析数据
         comparison = {

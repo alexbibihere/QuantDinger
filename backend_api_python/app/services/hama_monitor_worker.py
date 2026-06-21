@@ -9,7 +9,7 @@ import time
 import logging
 import os
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ class HamaMonitorWorker:
         self.symbols = [s.strip() for s in symbols_str.split(',') if s.strip()] if symbols_str else ['ETHUSDT']
         # 从环境变量读取监控间隔
         self.interval = int(os.getenv('BRAVE_MONITOR_INTERVAL', '3600'))
+        # 是否只在整点运行
+        self.run_only_on_hour = os.getenv('BRAVE_MONITOR_HOUR_ONLY', 'false').lower() == 'true'
         # 从环境变量读取浏览器类型，默认使用 brave
         self.browser_type = os.getenv('BRAVE_MONITOR_BROWSER_TYPE', 'brave')
 
@@ -117,11 +119,24 @@ class HamaMonitorWorker:
 
                 # 等待下一轮
                 if self.is_running:
-                    logger.info(f"\n⏰ 等待 {self.interval} 秒后进行下一轮...")
-                    for _ in range(self.interval):
-                        if not self.is_running:
-                            break
-                        time.sleep(1)
+                    if self.run_only_on_hour:
+                        # 计算到下一个整点的时间
+                        now = datetime.now()
+                        next_hour = (now.replace(minute=0, second=0, microsecond=0) +
+                                   timedelta(hours=1))
+                        wait_seconds = int((next_hour - now).total_seconds())
+
+                        logger.info(f"\n⏰ 整点模式：等待 {wait_seconds} 秒后，在 {next_hour.strftime('%H:%M:%S')} 进行下一轮...")
+                        for _ in range(wait_seconds):
+                            if not self.is_running:
+                                break
+                            time.sleep(1)
+                    else:
+                        logger.info(f"\n⏰ 等待 {self.interval} 秒后进行下一轮...")
+                        for _ in range(self.interval):
+                            if not self.is_running:
+                                break
+                            time.sleep(1)
 
             except Exception as e:
                 logger.error(f"监控循环出错: {e}")

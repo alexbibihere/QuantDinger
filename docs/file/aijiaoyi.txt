@@ -1,0 +1,8 @@
+http://www.aijiaoyi.xyz/chart
+https://www.aicoin.com/chart/okex_btcusdt
+爱交易 和 aicoin  账号密码一样 
+ 账号15574882481
+密码q8263454
+
+直接用账号密码登录 然后左侧列表 加密货币 选择 币安永续
+按涨幅最大的20 然后截图出来，添加到 项目  合约涨幅榜 的爱交易数据源

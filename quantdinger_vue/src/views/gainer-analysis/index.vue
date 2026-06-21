@@ -174,6 +174,20 @@
           </div>
         </template>
 
+        <!-- 历史频次 -->
+        <template slot="historyFreq" slot-scope="text, record">
+          <div class="history-freq" v-if="record.history_count_days > 0">
+            <a-tag :color="record.history_count_days >= 5 ? 'volcano' : record.history_count_days >= 3 ? 'orange' : 'blue'">
+              {{ record.history_count_days }}天
+            </a-tag>
+            <div class="freq-detail" v-if="record.history_rank">
+              <span class="freq-rank">#{{ record.history_rank }}</span>
+              <span class="freq-pct">{{ record.history_percentage }}%</span>
+            </div>
+          </div>
+          <span v-else class="freq-none">—</span>
+        </template>
+
         <!-- 操作 -->
         <template slot="action" slot-scope="text, record">
           <a-button
@@ -390,6 +404,15 @@ export default {
           title: this.$t('gainerAnalysis.table.conditions'),
           scopedSlots: { customRender: 'conditions' },
           width: 150
+        },
+        {
+          title: this.$t('gainerAnalysis.table.historyFreq'),
+          dataIndex: 'history_count_days',
+          scopedSlots: { customRender: 'historyFreq' },
+          width: 120,
+          align: 'center',
+          sorter: (a, b) => (a.history_count_days || 0) - (b.history_count_days || 0),
+          defaultSortOrder: 'descend'
         },
         {
           title: this.$t('common.action'),
@@ -749,6 +772,34 @@ export default {
         .condition-tag {
           font-size: 12px;
         }
+      }
+
+      .history-freq {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+
+        .freq-detail {
+          display: flex;
+          gap: 4px;
+          font-size: 11px;
+          color: #999;
+
+          .freq-rank {
+            font-weight: 600;
+            color: #666;
+          }
+
+          .freq-pct {
+            color: #aaa;
+          }
+        }
+      }
+
+      .freq-none {
+        color: #d9d9d9;
+        font-size: 14px;
       }
     }
   }

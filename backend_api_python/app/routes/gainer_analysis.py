@@ -40,6 +40,7 @@ def get_top_gainers():
             }), 400
 
         from app.services.binance_gainer import BinanceGainerService
+        from app.services.futures_gainers_history import get_futures_gainers_history
 
         # 直接获取基础数据，不做HAMA分析（更快）
         gainer_service = BinanceGainerService()
@@ -55,6 +56,34 @@ def get_top_gainers():
                 'msg': 'Failed to fetch top gainers',
                 'data': None
             }), 500
+
+        # 查询每个币种的历史出现频次（所有来源合并）
+        history_service = get_futures_gainers_history()
+
+        # 批量排行榜数据（一次查询避免循环查询）
+        ranking = history_service.get_top_frequent_symbols(limit=1000, days=30)
+        ranking_map = {s['symbol']: s for s in ranking}
+
+        for item in top_gainers:
+            symbol = item.get('symbol', '')
+            if not symbol:
+                item['history_count_days'] = 0
+                item['history_rank'] = None
+                item['history_percentage'] = 0
+                continue
+
+            symbol_rank = ranking_map.get(symbol)
+            if symbol_rank:
+                item['history_count_days'] = symbol_rank['count']
+                item['history_rank'] = next(
+                    (i + 1 for i, s in enumerate(ranking) if s['symbol'] == symbol),
+                    None
+                )
+                item['history_percentage'] = symbol_rank['percentage']
+            else:
+                item['history_count_days'] = 0
+                item['history_rank'] = None
+                item['history_percentage'] = 0
 
         return jsonify({
             'code': 1,

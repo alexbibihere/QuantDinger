@@ -1,0 +1,203 @@
+# HAMA 指标计算逻辑
+
+基于 TradingView Pine Script "NSDT HAMA Candles with Bollinger Bands" 的本地实现
+
+## 参数配置
+
+```python
+# HAMA 蜡烛图参数
+OPEN_LENGTH = 45    # 开盘价 EMA 周期
+HIGH_LENGTH = 20    # 最高价 EMA 周期
+LOW_LENGTH = 20     # 最低价 EMA 周期
+CLOSE_LENGTH = 40   # 收盘价 EMA 周期
+MA_LENGTH = 100     # MA 线 WMA 周期
+
+# 布林带参数
+BB_LENGTH = 400     # 布林带 SMA 周期
+BB_MULT = 2.0       # 标准差倍数
+```
+
+## 计算步骤
+
+### 1. HAMA 源数据计算
+
+```python
+# SourceOpen = (前一根K线的开盘价 + 前一根K线的收盘价) / 2
+SourceOpen = (open[1] + close[1]) / 2
+
+# SourceHigh = max(当前最高价, 当前收盘价)
+SourceHigh = max(high, close)
+
+# SourceLow = min(当前最低价, 当前收盘价)
+SourceLow = min(low, close)
+
+# SourceClose = (开盘价 + 最高价 + 最低价 + 收盘价) / 4
+SourceClose = (open + high + low + close) / 4
+```
+
+### 2. HAMA 蜡烛图计算
+
+```python
+# 对源数据分别进行 EMA 平滑
+CandleOpen = EMA(SourceOpen, 45)
+CandleHigh = EMA(SourceHigh, 20)
+CandleLow = EMA(SourceLow, 20)
+CandleClose = EMA(SourceClose, 40)
+```
+
+### 3. MA 线计算
+
+```python
+# 主 MA 线 (WMA 100)
+ma = WMA(close, 100)
+
+# MA 的 EMA(3) 作为中心线，用于颜色判断
+ma_ema3 = EMA(ma, 3)
+```
+
+### 4. 颜色/趋势判断
+
+```python
+if CandleClose > ma_ema3:
+    color = green  # 上涨
+elif CandleClose < ma_ema3:
+    color = red    # 下跌
+else:
+    color = gray   # 盘整
+```
+
+### 5. 交叉信号
+
+```python
+# 金叉（涨信号）：HAMA收盘上穿MA线
+cross_up = (CandleClose > ma) AND (CandleClose[1] <= ma[1])
+
+# 死叉（跌信号）：HAMA收盘下穿MA线
+cross_down = (CandleClose < ma) AND (CandleClose[1] >= ma[1])
+```
+
+### 6. 布林带计算
+
+```python
+# 中轨：SMA(400)
+basis = SMA(close, 400)
+
+# 标准差
+dev = StDev(close, 400)
+
+# 上下轨
+upper = basis + dev * 2.0
+lower = basis - dev * 2.0
+
+# 带宽
+bb_width = (upper - lower) / basis
+
+# 布林带状态
+if bb_width < 0.1:
+    bb_status = "收缩"
+elif bb_width > 0.15:
+    bb_status = "扩张"
+else:
+    bb_status = "正常"
+```
+
+## Python 实现代码
+
+```python
+import pandas as pd
+import numpy as np
+
+def calculate_hama(df: pd.DataFrame) -> pd.DataFrame:
+    """计算 HAMA 指标
+
+    Args:
+        df: K线数据，包含 open, high, low, close 列
+
+    Returns:
+        添加了 HAMA 指标的 DataFrame
+    """
+    # HAMA 源数据
+    df['SourceOpen'] = (df['open'].shift(1) + df['close'].shift(1)) / 2
+    df['SourceHigh'] = df[['high', 'close']].max(axis=1)
+    df['SourceLow'] = df[['low', 'close']].min(axis=1)
+    df['SourceClose'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+
+    # HAMA 蜡烛图
+    df['CandleOpen'] = df['SourceOpen'].ewm(span=45, adjust=False).mean()
+    df['CandleHigh'] = df['SourceHigh'].ewm(span=20, adjust=False).mean()
+    df['CandleLow'] = df['SourceLow'].ewm(span=20, adjust=False).mean()
+    df['CandleClose'] = df['SourceClose'].ewm(span=40, adjust=False).mean()
+
+    # MA 线
+    df['ma'] = df['close'].ewm(span=100, adjust=False).mean()
+    df['ma_ema3'] = df['ma'].ewm(span=3, adjust=False).mean()
+
+    # 颜色判断
+    def get_color(row):
+        if row['CandleClose'] > row['ma_ema3']:
+            return 'green'
+        elif row['CandleClose'] < row['ma_ema3']:
+            return 'red'
+        return 'gray'
+
+    df['hama_color'] = df.apply(get_color, axis=1)
+
+    # 交叉信号
+    df['cross_up'] = (
+        (df['CandleClose'] > df['ma']) &
+        (df['CandleClose'].shift(1) <= df['ma'].shift(1))
+    )
+    df['cross_down'] = (
+        (df['CandleClose'] < df['ma']) &
+        (df['CandleClose'].shift(1) >= df['ma'].shift(1))
+    )
+
+    # 布林带
+    df['bb_basis'] = df['close'].rolling(400).mean()
+    df['bb_dev'] = df['close'].rolling(400).std()
+    df['bb_upper'] = df['bb_basis'] + df['bb_dev'] * 2.0
+    df['bb_lower'] = df['bb_basis'] - df['bb_dev'] * 2.0
+
+    return df
+```
+
+## 数据要求
+
+- 最少需要 500 根 K线数据（用于计算 400 周期的布林带）
+- 推荐使用 15 分钟或更高时间框架的 K线
+- 数据源：Binance API (合约或现货均可)
+
+## 输出结果
+
+| 字段 | 说明 |
+|------|------|
+| price | 当前价格 |
+| hama.open | HAMA 开盘价 |
+| hama.high | HAMA 最高价 |
+| hama.low | HAMA 最低价 |
+| hama.close | HAMA 收盘价 |
+| hama.ma | MA 线值 |
+| hama.ma_ema3 | MA_EMA3 值 |
+| hama.color | 颜色 (green/red/gray) |
+| hama.trend | 趋势 (上涨/下跌/盘整) |
+| candle_ma_status | 蜡烛与MA关系 (MA上/MA下) |
+| bb.upper | 布林带上轨 |
+| bb.basis | 布林带中轨 |
+| bb.lower | 布林带下轨 |
+| bb.width_pct | 布林带宽度百分比 |
+| bb.status | 布林带状态 (收缩/扩张/正常) |
+| signal.last_cross_type | 最近交叉类型 (涨/跌) |
+| signal.last_cross_time | 最近交叉时间 |
+
+## 验证方法
+
+在 TradingView 上对比以下数值：
+1. HAMA 蜡烛收盘价
+2. MA 线 (WMA 100) 数值
+3. 布林带中轨数值
+4. 颜色状态
+
+如果数值有差异，检查：
+- K线数据时间范围是否一致
+- EMA/WMA 计算方法是否正确
+- 是否使用了相同的参数配置

@@ -1,0 +1,29 @@
+https://cn.tradingview.com/chart/U1FY2qxO/
+
+cookie:_sp_ses.cf1a=*; device_t=NGJsckJROjA.n3HZEI3N-918gB9TUUddSqPyUXLsyY0g02tB1ubTsiU; sessionid=dub5je6i4d5qbf58i1ua995ltdiuysw4; sessionid_sign=v3:eMD4bZkD3S0AzOxUrtNfUCzjuc0vh+AeIM+tZMtGZ6Q=; tv_ecuid=887fbd94-5998-4bdc-b3d1-fce9313e0336; _sp_id.cf1a=.1768604372.1.1782019274..2a43439c-766d-4947-bfe2-a30aa249e031..7d00d085-bd8b-4d50-9bf0-a6baeed754c9.1768604371828.371
+
+
+账号 ：alexbibiherr
+密码：Iam5323..
+
+前端端口永远使用8000,如果有端口占用，就停止服务再启动
+
+Brave浏览器路径：C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe
+
+hama指标访问流程：
+
+启动worker  Brave监控 启动brave无头浏览器 使用账号密码自动登录 访问tradingview页面 截图右下角的hama指标
+然后进行OCR识别，保存结果到数据库，前端调用接口 查询数据库展示
+
+
+QQ邮件
+邮箱：32319731984@qq.com
+授权码： agwnmwaexbytbicf
+收件人：329731984@qq.com,845848958@qq.com
+
+所有新创建的都按规则放入分别的文件夹，md放docs文件夹，bat放bat文件夹
+
+
+如果hama列表检测不到价格和状态，就重新启动longLogic逻辑
+
+邮件通知 根据上一次发送邮件的状态来判断是否发送，去除掉盘整状态和相同状态

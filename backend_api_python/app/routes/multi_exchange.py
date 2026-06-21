@@ -12,11 +12,12 @@ multi_exchange_bp = Blueprint('multi_exchange', __name__)
 @multi_exchange_bp.route('/compare', methods=['GET'])
 def compare_exchanges():
     """
-    对比多个交易所的涨幅榜数据
+    对比多个交易所的涨幅榜数据（HAMA默认不包含，按需加载）
 
     参数:
         market: 市场类型 (spot/futures)，默认 futures
         limit: 返回数量，默认 10
+        with_hama: 是否包含HAMA指标，默认 false（延迟加载）
 
     返回:
         Binance和OKX的涨幅榜数据及对比分析
@@ -24,6 +25,7 @@ def compare_exchanges():
     try:
         market = request.args.get('market', 'futures')
         limit = int(request.args.get('limit', 10))
+        with_hama = request.args.get('with_hama', 'false').lower() == 'true'  # 默认false
 
         if market not in ['spot', 'futures']:
             return jsonify({
@@ -42,7 +44,7 @@ def compare_exchanges():
         from app.services.multi_exchange_gainer import MultiExchangeGainerService
 
         service = MultiExchangeGainerService()
-        comparison = service.compare_exchanges(market=market, limit=limit)
+        comparison = service.compare_exchanges(market=market, limit=limit, with_hama=with_hama)
 
         return jsonify({
             'code': 1,

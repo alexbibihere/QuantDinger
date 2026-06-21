@@ -45,12 +45,12 @@ services:
       - TZ=Asia/Shanghai
       - SQLITE_DATABASE_FILE=/app/data/quantdinger.db
       # VPN代理配置 (启用HTTP代理)
-      - PROXY_PORT=7890
+      - PROXY_PORT=7894
       - PROXY_HOST=host.docker.internal
-      - PROXY_URL=http://host.docker.internal:7890
-      - HTTP_PROXY=http://host.docker.internal:7890
-      - HTTPS_PROXY=http://host.docker.internal:7890
-      - ALL_PROXY=http://host.docker.internal:7890
+      - PROXY_URL=http://host.docker.internal:7894
+      - HTTP_PROXY=http://host.docker.internal:7894
+      - HTTPS_PROXY=http://host.docker.internal:7894
+      - ALL_PROXY=http://host.docker.internal:7894
       # Redis配置 (使用本地Redis)
       - REDIS_ENABLED=true
       - REDIS_HOST=host.docker.internal

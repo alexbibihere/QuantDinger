@@ -19,6 +19,7 @@ _hama_scheduler = None
 _tv_cache_manager = None
 _tv_scheduler = None
 _hama_brave_monitor = None
+_hama_browseract_monitor = None  # 新增：BrowserAct监控器
 _hama_health_checker = None
 _long_logic_reader = None
 
@@ -245,70 +246,101 @@ def get_hama_brave_monitor():
     return _hama_brave_monitor
 
 
-def init_hama_brave_monitor():
+def get_hama_browseract_monitor():
+    """获取HAMA BrowserAct监控器（智能监控器）"""
+    global _hama_browseract_monitor
+    return _hama_browseract_monitor
+
+
+def get_current_hama_monitor():
     """
-    初始化HAMA Brave监控器
+    获取当前配置的HAMA监控器
+    根据配置自动选择 BrowserAct 或 Brave 监控器
+    """
+    # 优先使用 BrowserAct 监控器
+    if _hama_browseract_monitor:
+        return _hama_browseract_monitor
+    # 降级到 Brave 监控器
+    return _hama_brave_monitor
+
+
+def init_hama_browseract_monitor():
+    """
+    初始化HAMA BrowserAct智能监控器
+    支持直接数据提取、自动登录、Cloudflare绕过
     """
     import os
 
-    # 检查是否启用Brave监控
-    brave_monitor_enabled = os.getenv('BRAVE_MONITOR_ENABLED', 'true').lower() == 'true'
+    # 检查是否启用BrowserAct监控
+    browseract_monitor_enabled = os.getenv('BROWSERACT_MONITOR_ENABLED', 'true').lower() == 'true'
 
-    if not brave_monitor_enabled:
-        logger.info("HAMA Brave监控已禁用 (BRAVE_MONITOR_ENABLED=false)")
+    if not browseract_monitor_enabled:
+        logger.info("HAMA BrowserAct监控已禁用 (BROWSERACT_MONITOR_ENABLED=false)")
         return None
 
     try:
-        from app.services.hama_brave_monitor import get_brave_monitor
+        from app.services.hama_browseract_monitor import get_browseract_monitor
+        from app.config.browseract_config import BrowserActConfig
+
+        # 打印配置摘要
+        BrowserActConfig.print_config_summary()
 
         # 缓存有效期
-        cache_ttl = int(os.getenv('BRAVE_MONITOR_CACHE_TTL', 900))  # 默认15分钟
+        cache_ttl = int(os.getenv('BROWSERACT_MONITOR_CACHE_TTL', 900))  # 默认15分钟
 
-        # 初始化监控器 (使用 SQLite)
-        _brave_monitor = get_brave_monitor(redis_client=_redis_client, cache_ttl=cache_ttl, use_sqlite=True)
+        # 初始化BrowserAct监控器 (使用 SQLite)
+        _browseract_monitor = get_browseract_monitor(redis_client=_redis_client, cache_ttl=cache_ttl, use_sqlite=True)
 
-        logger.info(f"HAMA Brave监控器初始化完成, TTL={cache_ttl}秒, SQLite=启用")
+        logger.info(f"✅ HAMA BrowserAct监控器初始化完成, TTL={cache_ttl}秒, SQLite=启用")
 
         # 检查是否自动启动持续监控
-        auto_start = os.getenv('BRAVE_MONITOR_AUTO_START', 'false').lower() == 'true'
+        auto_start = os.getenv('BROWSERACT_MONITOR_AUTO_START', 'false').lower() == 'true'
 
         if auto_start:
-            # 监控间隔（秒）
-            interval = int(os.getenv('BRAVE_MONITOR_INTERVAL', '600'))  # 默认10分钟
+            # 监控间隔（秒）- 根据配置获取最优间隔
+            from app.config.browseract_config import BrowserActConfig
+            interval = BrowserActConfig.get_optimal_interval()
 
             # 监控币种列表
-            symbols_str = os.getenv('BRAVE_MONITOR_SYMBOLS', '')
+            symbols_str = os.getenv('BROWSERACT_MONITOR_SYMBOLS', '')
             symbols = [s.strip() for s in symbols_str.split(',') if s.strip()] if symbols_str else None
 
-            # 浏览器类型
-            browser_type = os.getenv('BRAVE_MONITOR_BROWSER_TYPE', 'brave')
-
-            # 使用默认币种列表（如果未指定）
+            # 使用推荐币种列表（如果未指定）
             if not symbols:
-                symbols = [
-                    'BTCUSDT',
-                    'ETHUSDT'
-                ]
+                symbols = BrowserActConfig.get_recommended_symbols()
 
-            logger.info(f"自动启动Brave持续监控: 币种={len(symbols)}个, 间隔={interval}秒")
+            # 启动监控
+            _browseract_monitor.start_monitoring(symbols, interval)
 
-            # 启动持续监控（后台线程）
-            import threading
-            monitor_thread = threading.Thread(
-                target=_brave_monitor.start_monitoring,
-                args=(symbols, interval, browser_type),
-                daemon=True,
-                name='BraveMonitorThread'
-            )
-            monitor_thread.start()
+            logger.info(f"🚀 BrowserAct自动监控已启动: {len(symbols)}个交易对, 间隔{interval}秒")
 
-            logger.info("✅ Brave持续监控已在后台启动")
-
-        return _brave_monitor
+        return _browseract_monitor
 
     except Exception as e:
-        logger.error(f"初始化HAMA Brave监控器失败: {e}")
+        logger.error(f"❌ BrowserAct监控器初始化失败: {e}")
+        logger.warning("⚠️  将降级到传统Playwright+OCR方案")
         return None
+
+
+def init_hama_brave_monitor():
+    """
+    初始化HAMA Brave监控器
+
+    ⚠️ 已废弃 — 由 tv-bridge (hama_tv_service.py) 替代
+    保留此函数仅为兼容引用，不会实际启动 Brave 浏览器。
+    """
+    import os
+
+    # 检查是否启用Brave监控（默认禁用，由 tv-bridge 替代）
+    brave_monitor_enabled = os.getenv('BRAVE_MONITOR_ENABLED', 'false').lower() == 'true'
+
+    if not brave_monitor_enabled:
+        logger.info("HAMA Brave监控已禁用 (使用 tv-bridge 替代)")
+        return None
+
+    # Brave 监控已废弃，返回 None
+    logger.warning("⚠️ BRAVE_MONITOR_ENABLED=true 但 Brave 监控已废弃，请改用 tv-bridge")
+    return None
 
 
 def get_hama_scheduler():
@@ -495,7 +527,7 @@ def init_hama_health_checker(long_logic_reader=None):
         from app.services.hama_health_checker import HAMAHealthChecker
         import os
 
-        global _hama_health_checker
+        global _hama_health_checker, _hama_brave_monitor
 
         # 检查间隔（秒），默认60秒
         check_interval = int(os.getenv('HAMA_HEALTH_CHECK_INTERVAL', '60'))
@@ -507,6 +539,10 @@ def init_hama_health_checker(long_logic_reader=None):
             check_interval=check_interval,
             failure_threshold=failure_threshold
         )
+
+        # 设置 Brave 监控器引用（用于状态一致性检查）
+        if _hama_brave_monitor:
+            _hama_health_checker.set_brave_monitor(_hama_brave_monitor)
 
         # 设置失败回调：重新读取 longLogic.txt 并重启监控 Worker
         if long_logic_reader:
@@ -538,6 +574,28 @@ def init_hama_health_checker(long_logic_reader=None):
                     logger.error(f"重载 LongLogic 配置失败: {e}", exc_info=True)
 
             _hama_health_checker.set_failure_callback(restart_long_logic_on_failure)
+
+        # 设置刷新回调：刷新指定币种的监控数据
+        def refresh_symbol_on_mismatch(symbol, check_result):
+            """状态不一致时刷新指定币种的监控数据"""
+            try:
+                logger.info(f"🔄 刷新 {symbol} 监控数据 (状态不一致)")
+                if _hama_brave_monitor:
+                    import os
+                    browser_type = os.getenv('BRAVE_MONITOR_BROWSER_TYPE', 'brave')
+                    result = _hama_brave_monitor.monitor_symbol(
+                        symbol=symbol,
+                        interval=15,
+                        browser_type=browser_type
+                    )
+                    if result:
+                        logger.info(f"  ✅ {symbol} 刷新成功: {result.get('hama_color')} ({result.get('hama_trend')})")
+                    else:
+                        logger.warning(f"  ⚠️ {symbol} 刷新失败")
+            except Exception as e:
+                logger.error(f"刷新 {symbol} 监控数据失败: {e}", exc_info=True)
+
+        _hama_health_checker.set_refresh_callback(refresh_symbol_on_mismatch)
 
         logger.info(f"✅ HAMA 健康检查器已初始化 (间隔={check_interval}秒, 阈值={failure_threshold}次)")
         return _hama_health_checker
@@ -642,7 +700,8 @@ def create_app(config_name='default'):
     Returns:
         Flask app
     """
-    global _redis_client, _hama_scheduler, _tv_cache_manager, _tv_scheduler, _hama_brave_monitor
+    import os
+    global _redis_client, _hama_scheduler, _tv_cache_manager, _tv_scheduler, _hama_brave_monitor, _hama_browseract_monitor
 
     app = Flask(__name__, static_folder=None)  # 禁用默认静态文件夹
 
@@ -669,14 +728,16 @@ def create_app(config_name='default'):
         # 4. 初始化HAMA Brave监控器
         _hama_brave_monitor = init_hama_brave_monitor()
 
-        # 5. 初始化邮件通知器
-        import os
-        try:
-            from app.services.hama_email_notifier import get_hama_email_notifier
-            email_notifier = get_hama_email_notifier()
-            logger.info("✅ HAMA 邮件通知器已初始化")
-        except Exception as e:
-            logger.error(f"初始化 HAMA 邮件通知器失败: {e}")
+        # 4.5. 初始化HAMA BrowserAct智能监控器（优先级更高）
+        _hama_browseract_monitor = init_hama_browseract_monitor()
+
+        # 5. 初始化邮件通知器（已禁用）
+        # try:
+        #     from app.services.hama_email_notifier import get_hama_email_notifier
+        #     email_notifier = get_hama_email_notifier()
+        #     logger.info("✅ HAMA 邮件通知器已初始化")
+        # except Exception as e:
+        #     logger.error(f"初始化 HAMA 邮件通知器失败: {e}")
 
         # 6. 启动 HAMA 监控 Worker (后台自动监控 + 邮件通知)
         enable_hama_worker = os.getenv('ENABLE_HAMA_WORKER', 'true').lower() == 'true'
@@ -738,7 +799,25 @@ def create_app(config_name='default'):
         _hama_health_checker = init_hama_health_checker(long_logic_reader=_long_logic_reader)
         start_hama_health_checker()
 
-        # 9. 启动截图缓存 Worker (已暂停)
+        # 9. 启动双币种监控服务 (BTCUSDT + ETHUSDT) - 已硬禁用（缺依赖一直报错）
+        enable_dual_monitor = False
+        # enable_dual_monitor = os.getenv('ENABLE_DUAL_MONITOR', 'true').lower() == 'true'
+        if enable_dual_monitor:
+            try:
+                from app.services.hama_dual_monitor import get_dual_monitor
+                dual_monitor = get_dual_monitor()
+
+                # 检查是否自动启动
+                auto_start = os.getenv('DUAL_MONITOR_AUTO_START', 'true').lower() == 'true'
+                if auto_start:
+                    dual_monitor.start()
+                    logger.info("✅ HAMA双币种监控已自动启动 (BTCUSDT + ETHUSDT)")
+                else:
+                    logger.info("ℹ️  HAMA双币种监控已初始化，等待手动启动")
+            except Exception as e:
+                logger.error(f"启动双币种监控失败: {e}")
+
+        # 10. 启动截图缓存 Worker (已暂停)
         try:
             logger.info("⏸️  截图缓存 Worker 已禁用 (如需启用，请取消注释)")
             # from app.routes.tradingview_scanner import start_screenshot_worker

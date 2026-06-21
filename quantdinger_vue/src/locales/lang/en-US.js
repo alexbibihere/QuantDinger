@@ -2001,6 +2001,7 @@ const locale = {
   'settings.field.INTERNAL_API_KEY': 'Internal API Key',
   // TradingView HAMA Test
   'menu.tvHamaTest': 'HAMA Chart Test',
+  'menu.guaguaSignal': '🐸 GuaGua Signals',
   'tvHamaTest.title': 'TradingView HAMA Chart Test',
   'tvHamaTest.subtitle': 'TradingView-style HAMA chart based on klinecharts with Bollinger Bands and MA line',
   'tvHamaTest.symbol': 'Symbol',
@@ -2017,7 +2018,29 @@ const locale = {
   'tvHamaTest.features': 'Features',
   'tvHamaTest.shortcuts': 'Shortcuts',
   'tvHamaTest.notes': 'Notes',
-  'tvHamaTest.support': 'Technical Support'
+  'tvHamaTest.support': 'Technical Support',
+// Futures Gainers
+'menu.futuresGainers': 'Futures Gainers',
+'futuresGainers.title': 'Futures Gainers Ranking',
+'futuresGainers.subtitle': 'Real-time comparison of Binance and OKX USDT-margined futures gainers',
+'futuresGainers.refresh': 'Refresh',
+'futuresGainers.autoRefresh': 'Auto Refresh',
+'futuresGainers.binanceCount': 'Binance Count',
+'futuresGainers.okxCount': 'OKX Count',
+'futuresGainers.topGainer': 'Top Gainer',
+'futuresGainers.updateTime': 'Update Time',
+'futuresGainers.binanceTitle': 'Binance',
+'futuresGainers.okxTitle': 'OKX',
+'futuresGainers.rank': 'Rank',
+'futuresGainers.symbol': 'Symbol',
+'futuresGainers.price': 'Price',
+'futuresGainers.change_pct': 'Change %',
+'futuresGainers.high_24h': '24h High',
+'futuresGainers.low_24h': '24h Low',
+'futuresGainers.volume_24h': '24h Volume',
+'futuresGainers.fetchError': 'Failed to fetch data',
+'futuresGainers.autoRefreshOn': 'Auto refresh enabled',
+'futuresGainers.autoRefreshOff': 'Auto refresh disabled'
 }
 
 export default {

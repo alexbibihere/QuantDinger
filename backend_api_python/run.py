@@ -90,7 +90,8 @@ def main():
         host=Config.HOST,
         port=Config.PORT,
         debug=Config.DEBUG,
-        threaded=True
+        threaded=True,
+        use_reloader=False
     )
 
 

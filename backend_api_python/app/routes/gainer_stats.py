@@ -2,7 +2,7 @@
 涨幅榜统计分析API路由
 """
 from flask import Blueprint, jsonify, request
-from app.services.gainer_tracker import get_gainer_tracker
+from app.services.futures_gainers_history import get_futures_gainers_history
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -24,7 +24,7 @@ def get_frequent_symbols():
 
         logger.info(f"获取最近{days}天最常出现的币种 (top {limit})")
 
-        tracker = get_gainer_tracker()
+        tracker = get_futures_gainers_history()
         result = tracker.get_top_frequent_symbols(limit=limit, days=days)
 
         return jsonify({
@@ -56,7 +56,7 @@ def get_symbol_appearances(symbol: str):
 
         logger.info(f"获取币种 {symbol} 最近{days}天的出现记录")
 
-        tracker = get_gainer_tracker()
+        tracker = get_futures_gainers_history()
         appearance_days = tracker.get_symbol_appearance_days(symbol, days=days)
         total_appearances = len(appearance_days)
 
@@ -91,7 +91,7 @@ def get_today_appearances():
     try:
         logger.info("获取今日涨幅榜币种列表")
 
-        tracker = get_gainer_tracker()
+        tracker = get_futures_gainers_history()
         symbols = tracker.get_today_appearances()
 
         return jsonify({
@@ -123,7 +123,7 @@ def get_history():
 
         logger.info(f"获取最近{days}天的涨幅榜历史数据")
 
-        tracker = get_gainer_tracker()
+        tracker = get_futures_gainers_history()
 
         # 使用新方法获取所有币种的历史记录
         all_symbols_history = tracker.get_all_symbols_history(days=days, min_appearances=1)
@@ -224,7 +224,7 @@ def record_appearances():
 
         logger.info(f"手动记录涨幅榜出现: {len(symbols)} 个币种, 日期: {date or '今天'}")
 
-        tracker = get_gainer_tracker()
+        tracker = get_futures_gainers_history()
         for symbol in symbols:
             tracker.record_appearance(symbol, date)
 

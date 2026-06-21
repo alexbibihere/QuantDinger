@@ -1,0 +1,2 @@
+// TradingView 搜索链接：https://cn.tradingview.com/search/?q=BINANCE:SYNUSDT
+// 这个页面会列出 Binance 下所有匹配的结果
